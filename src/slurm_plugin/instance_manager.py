@@ -95,6 +95,7 @@ class InstanceManager:
         """Launch requested EC2 instances for nodes."""
         # Reset failed_nodes
         self._clear_failed_nodes()
+        successful_nodes = []
         instances_to_launch = self._parse_requested_instances(node_list)
         for queue, compute_resources in instances_to_launch.items():
             for compute_resource, slurm_node_list in compute_resources.items():
@@ -123,6 +124,7 @@ class InstanceManager:
                                 self._update_dns_hostnames(assigned_nodes)
                             except Exception:
                                 self._update_failed_nodes(set(assigned_nodes.keys()))
+                        successful_nodes.extend(zip(batch_nodes[: len(launched_instances)], launched_instances))
                     except ClientError as e:
                         logger.error(
                             "Encountered exception when launching instances for nodes %s: %s",
@@ -138,6 +140,7 @@ class InstanceManager:
                             e,
                         )
                         self._update_failed_nodes(set(batch_nodes))
+        return successful_nodes
 
     def _update_slurm_node_addrs(self, slurm_nodes, launched_instances):
         """Update node information in slurm with info from launched EC2 instance."""

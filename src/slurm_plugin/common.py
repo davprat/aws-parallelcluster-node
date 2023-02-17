@@ -11,9 +11,10 @@
 
 
 import functools
+import json
 import logging
 from concurrent.futures import Future
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable, Optional, Protocol, TypedDict
 
 from common.utils import check_command_output, time_is_up, validate_absolute_path
@@ -135,3 +136,26 @@ def is_clustermgtd_heartbeat_valid(current_time, clustermgtd_timeout, clustermgt
     except Exception as e:
         logger.error("Unable to retrieve clustermgtd heartbeat with exception: %s", e)
         return False
+
+
+def metric_publisher(metric_logger, cluster_name, component, instance_id, **global_args):
+    def emit_metric(level, message, event_type, **kwargs):
+        try:
+            metric = {
+                "timestamp": datetime.now(timezone.utc).timestamp(),
+                "version": 0,
+                "cluster_name": cluster_name,
+                "component": component,
+                "level": level,
+                "instance_id": instance_id,
+                "event_type": event_type,
+                "message": message,
+            }
+            metric.update(global_args)
+            metric.update(kwargs)
+
+            metric_logger.info("%s", json.dumps(metric))
+        except Exception as e:
+            logger.error("Failed to publish metric: %s", e)
+
+    return emit_metric

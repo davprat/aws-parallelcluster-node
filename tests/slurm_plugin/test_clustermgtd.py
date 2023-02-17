@@ -201,6 +201,8 @@ def test_set_config(initialize_instance_manager_mock):
         insufficient_capacity_timeout=20,
         worker_pool_size=5,
         worker_pool_max_backlog=10,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
     )
     updated_config = SimpleNamespace(
         some_key_1="some_value_1",
@@ -208,6 +210,8 @@ def test_set_config(initialize_instance_manager_mock):
         insufficient_capacity_timeout=10,
         worker_pool_size=10,
         worker_pool_max_backlog=5,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
     )
 
     cluster_manager = ClusterManager(initial_config)
@@ -232,6 +236,8 @@ def test_exception_from_report_console_output_from_nodes(mocker):
         worker_pool_max_backlog=0,
         compute_console_logging_max_sample_size=2,
         compute_console_wait_time=10,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
     )
     unhealthy_nodes = [
         StaticNode("queue1-st-c5xlarge-3", "ip-3", "hostname", "some_state", "queue1"),
@@ -333,7 +339,12 @@ def test_clean_up_inactive_partition(
     mocker,
 ):
     # Test setup
-    mock_sync_config = SimpleNamespace(terminate_max_batch_size=4, insufficient_capacity_timeout=600)
+    mock_sync_config = SimpleNamespace(
+        terminate_max_batch_size=4,
+        insufficient_capacity_timeout=600,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
+    )
     cluster_manager = ClusterManager(mock_sync_config)
     part = SlurmPartition("partition4", "placeholder_nodes", "INACTIVE")
     for node, instance in zip(slurm_inactive_nodes, inactive_instances):
@@ -376,6 +387,7 @@ def test_get_ec2_instances(mocker):
         create_fleet_overrides={},
         insufficient_capacity_timeout=600,
         fleet_config=FLEET_CONFIG,
+        head_node_instance_id="i-instance-id",
     )
     cluster_manager = ClusterManager(mock_sync_config)
     cluster_manager._instance_manager.get_cluster_instances = mocker.MagicMock()
@@ -567,6 +579,7 @@ def test_perform_health_check_actions(
         create_fleet_overrides={},
         fleet_config=FLEET_CONFIG,
         insufficient_capacity_timeout=600,
+        head_node_instance_id="i-instance-id",
     )
     # Mock functions
     cluster_manager = ClusterManager(mock_sync_config)
@@ -690,6 +703,8 @@ def test_handle_health_check(
         health_check_timeout_after_slurmdstarttime=180,
         protected_failure_count=2,
         insufficient_capacity_timeout=600,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
     )
 
     cluster_manager = ClusterManager(mock_sync_config)
@@ -733,7 +748,11 @@ def test_handle_health_check(
     "initialize_instance_manager_mock", "initialize_executor_mock", "initialize_console_logger_mock"
 )
 def test_update_static_nodes_in_replacement(current_replacing_nodes, slurm_nodes, expected_replacing_nodes, mocker):
-    mock_sync_config = SimpleNamespace(insufficient_capacity_timeout=600)
+    mock_sync_config = SimpleNamespace(
+        insufficient_capacity_timeout=600,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
+    )
     cluster_manager = ClusterManager(mock_sync_config)
     cluster_manager._static_nodes_in_replacement = current_replacing_nodes
     cluster_manager._update_static_nodes_in_replacement(slurm_nodes)
@@ -838,7 +857,10 @@ def test_handle_unhealthy_dynamic_nodes(
     for node, instance in zip(unhealthy_dynamic_nodes, instances):
         node.instance = instance
     mock_sync_config = SimpleNamespace(
-        terminate_max_batch_size=4, disable_nodes_on_insufficient_capacity=disable_nodes_on_insufficient_capacity
+        terminate_max_batch_size=4,
+        disable_nodes_on_insufficient_capacity=disable_nodes_on_insufficient_capacity,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
     )
     cluster_manager = ClusterManager(mock_sync_config)
     mock_instance_manager = cluster_manager._instance_manager
@@ -890,7 +912,12 @@ def test_handle_powering_down_nodes(
 ):
     for node, instance in zip(slurm_nodes, instances):
         node.instance = instance
-    mock_sync_config = SimpleNamespace(terminate_max_batch_size=4, insufficient_capacity_timeout=600)
+    mock_sync_config = SimpleNamespace(
+        terminate_max_batch_size=4,
+        insufficient_capacity_timeout=600,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
+    )
     cluster_manager = ClusterManager(mock_sync_config)
     mock_instance_manager = cluster_manager._instance_manager
     reset_nodes_mock = mocker.patch("slurm_plugin.clustermgtd.reset_nodes", autospec=True)
@@ -1047,6 +1074,7 @@ def test_handle_unhealthy_static_nodes(
         compute_console_wait_time=1,
         worker_pool_size=5,
         worker_pool_max_backlog=10,
+        head_node_instance_id="i-instance-id",
     )
     for node, instance in zip(unhealthy_static_nodes, instances):
         node.instance = instance
@@ -1245,6 +1273,8 @@ def test_maintain_nodes(
         terminate_down_nodes=True,
         insufficient_capacity_timeout=20,
         disable_nodes_on_insufficient_capacity=disable_nodes_on_insufficient_capacity,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
     )
     cluster_manager = ClusterManager(mock_sync_config)
     cluster_manager._static_nodes_in_replacement = static_nodes_in_replacement
@@ -1346,6 +1376,7 @@ def test_terminate_orphaned_instances(
         run_instances_overrides={},
         create_fleet_overrides={},
         fleet_config=FLEET_CONFIG,
+        head_node_instance_id="i-instance-id",
     )
     for instance, node in zip(cluster_instances, slurm_nodes):
         instance.slurm_node = node
@@ -1506,6 +1537,7 @@ def test_manage_cluster(
         insufficient_capacity_timeout=600,
         node_replacement_timeout=1800,
         terminate_max_batch_size=1,
+        head_node_instance_id="i-instance-id",
     )
     mocker.patch("time.sleep")
     cluster_manager = ClusterManager(mock_sync_config)
@@ -2114,6 +2146,7 @@ def test_handle_successfully_launched_nodes(
         run_instances_overrides={},
         create_fleet_overrides={},
         fleet_config=FLEET_CONFIG,
+        head_node_instance_id="i-instance-id",
     )
     # Mock associated function
     cluster_manager = ClusterManager(mock_sync_config)
@@ -2172,7 +2205,11 @@ def test_handle_successfully_launched_nodes(
 )
 def test_increase_partitions_protected_failure_count(nodes, initial_map, expected_map, mocker):
     # Mock associated function
-    mock_sync_config = SimpleNamespace(insufficient_capacity_timeout=600)
+    mock_sync_config = SimpleNamespace(
+        insufficient_capacity_timeout=600,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
+    )
     cluster_manager = ClusterManager(mock_sync_config)
     cluster_manager._partitions_protected_failure_count_map = initial_map
     # Run test
@@ -2193,7 +2230,11 @@ def test_increase_partitions_protected_failure_count(nodes, initial_map, expecte
 )
 def test_reset_partition_failure_count(mocker, partition, expected_map):
     # Mock associated function
-    mock_sync_config = SimpleNamespace(insufficient_capacity_timeout=600)
+    mock_sync_config = SimpleNamespace(
+        insufficient_capacity_timeout=600,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
+    )
     cluster_manager = ClusterManager(mock_sync_config)
     cluster_manager._partitions_protected_failure_count_map = {"queue1": 2, "queue2": 1}
     cluster_manager._reset_partition_failure_count(partition)
@@ -2259,7 +2300,12 @@ def test_handle_protected_mode_process(
     mocker,
     caplog,
 ):
-    mock_sync_config = SimpleNamespace(protected_failure_count=10, insufficient_capacity_timeout=600)
+    mock_sync_config = SimpleNamespace(
+        protected_failure_count=10,
+        insufficient_capacity_timeout=600,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
+    )
     caplog.set_level(logging.INFO)
     cluster_manager = ClusterManager(mock_sync_config)
     mock_handle_successfully_launched_nodes = mocker.patch.object(
@@ -2309,7 +2355,11 @@ def test_enter_protected_mode(
     caplog,
 ):
     caplog.set_level(logging.INFO)
-    mock_sync_config = SimpleNamespace(insufficient_capacity_timeout=600)
+    mock_sync_config = SimpleNamespace(
+        insufficient_capacity_timeout=600,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
+    )
     cluster_manager = ClusterManager(mock_sync_config)
     mock_update_compute_fleet_status = mocker.patch.object(cluster_manager, "_update_compute_fleet_status")
     mocker.patch("common.schedulers.slurm_commands.run_command", autospec=True)
@@ -2382,7 +2432,12 @@ def initialize_console_logger_mock(mocker):
     "initialize_instance_manager_mock", "initialize_executor_mock", "initialize_console_logger_mock"
 )
 def test_is_node_being_replaced(current_replacing_nodes, node, instance, current_time, expected_result):
-    mock_sync_config = SimpleNamespace(node_replacement_timeout=30, insufficient_capacity_timeout=3)
+    mock_sync_config = SimpleNamespace(
+        node_replacement_timeout=30,
+        insufficient_capacity_timeout=3,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
+    )
     cluster_manager = ClusterManager(mock_sync_config)
     cluster_manager._current_time = current_time
     cluster_manager._static_nodes_in_replacement = current_replacing_nodes
@@ -2436,7 +2491,12 @@ def test_is_node_being_replaced(current_replacing_nodes, node, instance, current
 )
 def test_is_node_replacement_timeout(node, current_node_in_replacement, is_replacement_timeout, instance):
     node.instance = instance
-    mock_sync_config = SimpleNamespace(node_replacement_timeout=30, insufficient_capacity_timeout=-2.2)
+    mock_sync_config = SimpleNamespace(
+        node_replacement_timeout=30,
+        insufficient_capacity_timeout=-2.2,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
+    )
     cluster_manager = ClusterManager(mock_sync_config)
     cluster_manager._current_time = datetime(2020, 1, 2, 0, 0, 0)
     cluster_manager._static_nodes_in_replacement = current_node_in_replacement
@@ -2501,7 +2561,11 @@ def test_handle_failed_health_check_nodes_in_replacement(
         node.is_static_nodes_in_replacement = is_node_in_replacement
         node.is_failing_health_check = is_node_failing_health_check
 
-    mock_sync_config = SimpleNamespace(insufficient_capacity_timeout=600)
+    mock_sync_config = SimpleNamespace(
+        insufficient_capacity_timeout=600,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
+    )
     cluster_manager = ClusterManager(mock_sync_config)
     cluster_manager._static_nodes_in_replacement = current_nodes_in_replacement
     # Run tests
@@ -2557,7 +2621,11 @@ def test_handle_bootstrap_failure_nodes(
 ):
     # Mock functions
     mock_sync_config = SimpleNamespace(
-        terminate_drain_nodes=True, terminate_down_nodes=True, insufficient_capacity_timeout=600
+        terminate_drain_nodes=True,
+        terminate_down_nodes=True,
+        insufficient_capacity_timeout=600,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
     )
     cluster_manager = ClusterManager(mock_sync_config)
     for node, instance in zip(active_nodes, instances):
@@ -2617,7 +2685,11 @@ def test_handle_bootstrap_failure_nodes(
 def test_find_bootstrap_failure_nodes(active_nodes, instances):
     # Mock functions
     mock_sync_config = SimpleNamespace(
-        terminate_drain_nodes=True, terminate_down_nodes=True, insufficient_capacity_timeout=600
+        terminate_drain_nodes=True,
+        terminate_down_nodes=True,
+        insufficient_capacity_timeout=600,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
     )
     cluster_manager = ClusterManager(mock_sync_config)
     for node, instance in zip(active_nodes, instances):
@@ -2788,7 +2860,12 @@ def test_handle_ice_nodes(
     mocker,
     caplog,
 ):
-    mock_sync_config = SimpleNamespace(protected_failure_count=10, insufficient_capacity_timeout=600)
+    mock_sync_config = SimpleNamespace(
+        protected_failure_count=10,
+        insufficient_capacity_timeout=600,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
+    )
     caplog.set_level(logging.INFO)
     cluster_manager = ClusterManager(mock_sync_config)
     cluster_manager._current_time = datetime(2021, 1, 2, 0, 0, 0)
@@ -3132,7 +3209,11 @@ def test_reset_timeout_expired_compute_resources(
     caplog,
 ):
     caplog.set_level(logging.INFO)
-    config = SimpleNamespace(insufficient_capacity_timeout=20)
+    config = SimpleNamespace(
+        insufficient_capacity_timeout=20,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
+    )
     cluster_manager = ClusterManager(config)
     cluster_manager._current_time = datetime(2021, 1, 2, 0, 0, 0)
     cluster_manager._insufficient_capacity_compute_resources = initial_insufficient_capacity_compute_resources
@@ -3483,6 +3564,8 @@ def test_find_unhealthy_slurm_nodes(
         terminate_drain_nodes=True,
         terminate_down_nodes=True,
         disable_nodes_on_insufficient_capacity=disable_nodes_on_insufficient_capacity,
+        cluster_name="cluster",
+        head_node_instance_id="i-instance-id",
     )
     cluster_manager = ClusterManager(mock_sync_config)
     # Run test

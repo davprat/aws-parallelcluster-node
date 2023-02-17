@@ -250,6 +250,9 @@ class SlurmNode(metaclass=ABCMeta):
         """Check if a slurm node has failed registration with the Slurm management daemon."""
         return self.SLURM_SCONTROL_INVALID_REGISTRATION_STATE in self.states
 
+    def description(self):
+        return {key: repr(value) for key, value in self.__dict__.items()}
+
     @abstractmethod
     def is_state_healthy(self, terminate_drain_nodes, terminate_down_nodes, log_warn_if_unhealthy=True):
         """Check if a slurm node's scheduler state is considered healthy."""

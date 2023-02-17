@@ -21,11 +21,14 @@ from logging.config import fileConfig
 from botocore.config import Config
 from common.schedulers.slurm_commands import resume_powering_down_nodes, update_all_partitions
 from slurm_plugin.clustermgtd import ComputeFleetStatus, ComputeFleetStatusManager
-from slurm_plugin.common import log_exception
+from slurm_plugin.common import log_exception, metric_publisher
 from slurm_plugin.instance_manager import InstanceManager
 from slurm_plugin.slurm_resources import CONFIG_FILE_DIR, PartitionStatus
 
 log = logging.getLogger(__name__)
+metrics_logger = log.getChild("metrics")
+
+_publish_metric = None
 
 
 class SlurmFleetManagerConfig:
@@ -59,6 +62,7 @@ class SlurmFleetManagerConfig:
 
         self.region = config.get("slurm_fleet_status_manager", "region")
         self.cluster_name = config.get("slurm_fleet_status_manager", "cluster_name")
+        self.instance_id = config.get("slurm_fleet_status_manager", "instance_id")
         self.terminate_max_batch_size = config.getint(
             "slurm_fleet_status_manager",
             "terminate_max_batch_size",
@@ -109,12 +113,25 @@ def _stop_partitions(config):
 def _get_computefleet_status(computefleet_status_data_path):
     try:
         with open(computefleet_status_data_path, "r", encoding="utf-8") as computefleet_status_data_file:
+            computefleet_status_json = json.load(computefleet_status_data_file)
             computefleet_status = ComputeFleetStatus(
-                json.load(computefleet_status_data_file).get(ComputeFleetStatusManager.COMPUTE_FLEET_STATUS_ATTRIBUTE)
+                computefleet_status_json.get(ComputeFleetStatusManager.COMPUTE_FLEET_STATUS_ATTRIBUTE)
+            )
+            _publish_metric(
+                "INFO",
+                "Compute fleet status",
+                event_type="compute_fleet_status",
+                computefleet_status=computefleet_status_json,
             )
         log.info("ComputeFleet status is: %s", computefleet_status)
     except Exception as e:
         log.error("Cannot read compute fleet status data file: %s.\nException: %s", computefleet_status_data_path, e)
+        _publish_metric(
+            "ERROR",
+            f"Cannot read compute fleet status data file: {computefleet_status_data_path}",
+            event_type="compute_fleet_status_error",
+            exception=repr(e),
+        )
         raise
 
     return computefleet_status
@@ -144,6 +161,13 @@ def main():
                 default_log_file,
                 e,
             )
+        global _publish_metric
+        _publish_metric = metric_publisher(
+            metrics_logger,
+            fleet_status_manager_config.cluster_name,
+            "fleet_status_manager",
+            fleet_status_manager_config.instance_id,
+        )
         log.info("FleetManager config: %s", fleet_status_manager_config)
         _manage_fleet_status_transition(fleet_status_manager_config, args.computefleet_status_data)
         log.info("FleetManager finished.")

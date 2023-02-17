@@ -39,7 +39,7 @@ from common.schedulers.slurm_commands import (
 from common.time_utils import seconds
 from common.utils import check_command_output, read_json, sleep_remaining_loop_time, time_is_up, wait_remaining_time
 from retrying import retry
-from slurm_plugin.common import TIMESTAMP_FORMAT, log_exception, print_with_count
+from slurm_plugin.common import TIMESTAMP_FORMAT, log_exception, metric_publisher, print_with_count
 from slurm_plugin.console_logger import ConsoleLogger
 from slurm_plugin.instance_manager import InstanceManager
 from slurm_plugin.slurm_resources import (
@@ -59,6 +59,7 @@ CONSOLE_OUTPUT_WAIT_TIME = 5 * 60
 MAXIMUM_TASK_BACKLOG = 100
 log = logging.getLogger(__name__)
 compute_logger = log.getChild("console_output")
+metrics_logger = log.getChild("metrics")
 
 
 class ComputeFleetStatus(Enum):
@@ -193,6 +194,7 @@ class ClustermgtdConfig:
         self.dynamodb_table = config.get("clustermgtd", "dynamodb_table")
         self.head_node_private_ip = config.get("clustermgtd", "head_node_private_ip")
         self.head_node_hostname = config.get("clustermgtd", "head_node_hostname")
+        self.head_node_instance_id = config.get("clustermgtd", "instance_id", fallback="unknown")
 
         # Configure boto3 to retry 1 times by default
         self._boto3_retry = config.getint("clustermgtd", "boto3_retry", fallback=self.DEFAULTS.get("max_retry"))
@@ -376,6 +378,7 @@ class ClusterManager:
         self._instance_manager = None
         self._task_executor = None
         self._console_logger = None
+        self._publish_metric = None
         self.set_config(config)
 
     def set_config(self, config: ClustermgtdConfig):
@@ -397,6 +400,9 @@ class ClusterManager:
             self._compute_fleet_status_manager = ComputeFleetStatusManager()
             self._instance_manager = self._initialize_instance_manager(config)
             self._console_logger = self._initialize_console_logger(config)
+            self._publish_metric = metric_publisher(
+                metrics_logger, config.cluster_name, "clustermgtd", config.head_node_instance_id
+            )
 
     def shutdown(self):
         if self._task_executor:
@@ -492,6 +498,13 @@ class ClusterManager:
                     log.info("Retrieving nodes info from the scheduler")
                     nodes = self._get_node_info_with_retry()
                     log.debug("Nodes: %s", nodes)
+                    for node in nodes:
+                        self._publish_metric(
+                            "INFO",
+                            "Node Info",
+                            event_type="node_info",
+                            node=node.description(),
+                        )
                     partitions_name_map, compute_resource_nodes_map = self._parse_scheduler_nodes_data(nodes)
                 except Exception as e:
                     log.error(

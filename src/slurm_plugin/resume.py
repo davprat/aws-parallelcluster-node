@@ -20,11 +20,14 @@ from logging.config import fileConfig
 from botocore.config import Config
 from common.schedulers.slurm_commands import get_nodes_info, set_nodes_down
 from common.utils import read_json
-from slurm_plugin.common import is_clustermgtd_heartbeat_valid, print_with_count
+from slurm_plugin.common import is_clustermgtd_heartbeat_valid, metric_publisher, print_with_count
 from slurm_plugin.instance_manager import InstanceManager
 from slurm_plugin.slurm_resources import CONFIG_FILE_DIR
 
 log = logging.getLogger(__name__)
+metrics_logger = log.getChild("metrics")
+
+_publish_metric = None
 
 
 class SlurmResumeConfig:
@@ -120,6 +123,7 @@ class SlurmResumeConfig:
             self._boto3_config["proxies"] = {"https": proxy}
         self.boto3_config = Config(**self._boto3_config)
         self.logging_config = config.get("slurm_resume", "logging_config", fallback=self.DEFAULTS.get("logging_config"))
+        self.instance_id = config.get("slurm_resume", "instance_id")
 
         log.info(self.__repr__())
 
@@ -140,6 +144,14 @@ def _handle_failed_nodes(node_list, reason="Failure when resuming nodes"):
     """
     try:
         log.info("Setting following failed nodes into DOWN state: %s", print_with_count(node_list))
+        for node in node_list:
+            _publish_metric(
+                "WARNING",
+                "Setting failed node to DOWN state",
+                event_type="failed_node",
+                reason=reason,
+                node=node,
+            )
         set_nodes_down(node_list, reason=reason)
     except Exception as e:
         log.error("Failed to place nodes %s into down with exception: %s", print_with_count(node_list), e)
@@ -178,7 +190,7 @@ def _resume(arg_nodes, resume_config):
         run_instances_overrides=resume_config.run_instances_overrides,
         create_fleet_overrides=resume_config.create_fleet_overrides,
     )
-    instance_manager.add_instances_for_nodes(
+    successful_nodes = instance_manager.add_instances_for_nodes(
         node_list=node_list,
         launch_batch_size=resume_config.max_batch_size,
         update_node_address=resume_config.update_node_address,
@@ -187,6 +199,12 @@ def _resume(arg_nodes, resume_config):
     failed_nodes = set().union(*instance_manager.failed_nodes.values())
     success_nodes = [node for node in node_list if node not in failed_nodes]
     log.info("Successfully launched nodes %s", print_with_count(success_nodes))
+
+    for success in successful_nodes:
+        node, instance = success
+        _publish_metric(
+            "INFO", "Launched Node", event_type="successfurl_node", node=repr(node), instance=repr(instance)
+        )
 
     if failed_nodes:
         log.error(
@@ -221,6 +239,11 @@ def main():
                 default_log_file,
                 e,
             )
+        global _publish_metric
+        _publish_metric = metric_publisher(
+            metrics_logger, resume_config.cluster_name, "slurm_resume", resume_config.instance_id
+        )
+
         log.info("ResumeProgram config: %s", resume_config)
         _resume(args.nodes, resume_config)
         log.info("ResumeProgram finished.")
