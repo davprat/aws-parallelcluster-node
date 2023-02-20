@@ -20,6 +20,7 @@ from logging.config import fileConfig
 # A nosec comment is appended to the following line in order to disable the B404 check.
 # In this file the input of the module subprocess is trusted.
 from subprocess import CalledProcessError  # nosec B404
+from typing import Callable
 
 from botocore.config import Config
 from common.schedulers.slurm_commands import get_nodes_info
@@ -31,6 +32,8 @@ from slurm_plugin.common import (
     expired_clustermgtd_heartbeat,
     get_clustermgtd_heartbeat,
     log_exception,
+    metric_publisher,
+    metric_publisher_noop,
 )
 from slurm_plugin.slurm_resources import CONFIG_FILE_DIR
 
@@ -40,6 +43,10 @@ RELOAD_CONFIG_ITERATIONS = 10
 SLURM_PLUGIN_DIR = "/opt/slurm/etc/pcluster/.slurm_plugin"
 COMPUTEMGTD_CONFIG_PATH = f"{SLURM_PLUGIN_DIR}/parallelcluster_computemgtd.conf"
 log = logging.getLogger(__name__)
+metrics_logger = log.getChild("metrics")
+
+
+_publish_metric: Callable = metric_publisher_noop
 
 
 class ComputemgtdConfig:
@@ -85,6 +92,8 @@ class ComputemgtdConfig:
         # Get config settings
         self.region = config.get("computemgtd", "region")
         self.cluster_name = config.get("computemgtd", "cluster_name")
+        self.instance_id = config.get("computemgtd", "instance_id", fallback="unknown")
+        self.instance_type = config.get("computemgtd", "instance_type", fallback="unknown")
         # Configure boto3 to retry 1 times by default
         self._boto3_retry = config.getint("clustermgtd", "boto3_retry", fallback=self.DEFAULTS.get("max_retry"))
         self._boto3_config = {"retries": {"max_attempts": self._boto3_retry, "mode": "standard"}}
@@ -126,10 +135,16 @@ class ComputemgtdConfig:
 
 
 @log_exception(log, "self terminating compute instance", catch_exception=CalledProcessError, raise_on_error=False)
-def _self_terminate():
+def _self_terminate(self_node):
     """Self terminate the instance."""
     # Sleep for 10 seconds so termination log entries are uploaded to CW logs
     log.info("Preparing to self terminate the instance in 10 seconds!")
+    _publish_metric(
+        "INFO",
+        "Self terminating instance",
+        "node_terminate",
+        node=self_node.description() if self_node else None,
+    )
     time.sleep(10)
     log.info("Self terminating instance now!")
     run_command("sudo shutdown -h now")
@@ -152,14 +167,27 @@ def _is_self_node_down(self_nodename):
     try:
         self_node = _get_nodes_info_with_retry(self_nodename)[0]
         log.info("Current self node state %s", self_node.__repr__())
+        _publish_metric("INFO", "Current node state", "node_state", node=self_node.description())
         if self_node.is_down() or self_node.is_power():
             log.warning("Node is incorrectly attached to scheduler, preparing for self termination...")
+            _publish_metric(
+                "WARNING",
+                "Node is incorrectly attached to scheduler",
+                "node_state_not_attached",
+                node=self_node.description(),
+            )
             return True
         log.info("Node is correctly attached to scheduler, not terminating...")
         return False
     except Exception as e:
         # This could happen is slurmctld is down completely
         log.error("Unable to retrieve current node state from slurm with exception: %s\nConsidering node as down!", e)
+        _publish_metric(
+            "ERROR",
+            "Unable to retrieve current node state from slurm",
+            "node_state_exception",
+            exception=repr(e),
+        )
 
     return True
 
@@ -179,6 +207,18 @@ def _load_daemon_config(config_file):
     return computemgtd_config
 
 
+def _configure_metrics(computemgtd_config):
+    global _publish_metric
+    _publish_metric = metric_publisher(
+        metrics_logger,
+        computemgtd_config.cluster_name,
+        "computemgtd",
+        computemgtd_config.instance_id,
+        node_id=computemgtd_config.nodename,
+        instance_type=computemgtd_config.instance_type,
+    )
+
+
 def _run_computemgtd(config_file):
     """Run computemgtd actions."""
     # Initial default heartbeat time as computemgtd startup time
@@ -186,6 +226,16 @@ def _run_computemgtd(config_file):
     log.info("Initializing clustermgtd heartbeat to be computemgtd startup time: %s", last_heartbeat)
     computemgtd_config = _load_daemon_config(config_file)
     reload_config_counter = RELOAD_CONFIG_ITERATIONS
+    _configure_metrics(computemgtd_config=computemgtd_config)
+    self_node = _get_nodes_info_with_retry(computemgtd_config.nodename)[0]
+    _publish_metric(
+        "INFO",
+        "Initializing clustermgtd heartbeat",
+        "computemgtd_init",
+        heartbeat=str(last_heartbeat),
+        node=self_node.description() if self_node else None,
+    )
+
     while True:
         # Get current time
         current_time = datetime.now(tz=timezone.utc)
@@ -194,8 +244,16 @@ def _run_computemgtd(config_file):
             try:
                 computemgtd_config = _load_daemon_config(config_file)
                 reload_config_counter = RELOAD_CONFIG_ITERATIONS
+                _configure_metrics(computemgtd_config=computemgtd_config)
             except Exception as e:
                 log.warning("Unable to reload daemon config, using previous one.\nException: %s", e)
+                _publish_metric(
+                    "WARNING",
+                    "Unable to reload daemon config, using previous one.",
+                    "configuration_failure",
+                    exception=repr(e),
+                    node=self_node.description() if self_node else None,
+                )
         else:
             reload_config_counter -= 1
 
@@ -208,6 +266,14 @@ def _run_computemgtd(config_file):
                 "Unable to retrieve clustermgtd heartbeat. Using last known heartbeat: %s with exception: %s",
                 last_heartbeat,
                 e,
+            )
+            _publish_metric(
+                "WARNING",
+                "Unable to retrieve clustermgtd heartbeat. Using last known heartbeat",
+                "heartbeat_failure",
+                last_heartbeat=last_heartbeat,
+                exception=repr(e),
+                node=self_node.description() if self_node else None,
             )
         if expired_clustermgtd_heartbeat(last_heartbeat, current_time, computemgtd_config.clustermgtd_timeout):
             if computemgtd_config.disable_computemgtd_actions:

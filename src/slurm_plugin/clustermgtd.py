@@ -23,7 +23,7 @@ from logging.config import fileConfig
 # A nosec comment is appended to the following line in order to disable the B404 check.
 # In this file the input of the module subprocess is trusted.
 from subprocess import CalledProcessError  # nosec B404
-from typing import Dict, List
+from typing import Dict, Iterable, List
 
 from botocore.config import Config
 from common.schedulers.slurm_commands import (
@@ -397,12 +397,12 @@ class ClusterManager:
             self._task_executor = self._initialize_executor(config)
 
             self._config = config
-            self._compute_fleet_status_manager = ComputeFleetStatusManager()
-            self._instance_manager = self._initialize_instance_manager(config)
-            self._console_logger = self._initialize_console_logger(config)
             self._publish_metric = metric_publisher(
                 metrics_logger, config.cluster_name, "clustermgtd", config.head_node_instance_id
             )
+            self._compute_fleet_status_manager = ComputeFleetStatusManager()
+            self._instance_manager = self._initialize_instance_manager(config, self._publish_metric)
+            self._console_logger = self._initialize_console_logger(config)
 
     def shutdown(self):
         if self._task_executor:
@@ -410,7 +410,7 @@ class ClusterManager:
             self._task_executor = None
 
     @staticmethod
-    def _initialize_instance_manager(config):
+    def _initialize_instance_manager(config, publish_metric):
         """Initialize instance manager class that will be used to launch/terminate/describe instances."""
         return InstanceManager(
             config.region,
@@ -425,6 +425,7 @@ class ClusterManager:
             run_instances_overrides=config.run_instances_overrides,
             create_fleet_overrides=config.create_fleet_overrides,
             fleet_config=config.fleet_config,
+            publish_metric=publish_metric,
         )
 
     def _initialize_executor(self, config):
@@ -750,7 +751,7 @@ class ClusterManager:
                     self._partitions_protected_failure_count_map[p][compute_resource] = 1
 
     @log_exception(log, "maintaining unhealthy dynamic nodes", raise_on_error=False)
-    def _handle_unhealthy_dynamic_nodes(self, unhealthy_dynamic_nodes):
+    def _handle_unhealthy_dynamic_nodes(self, unhealthy_dynamic_nodes: Iterable[SlurmNode]):
         """
         Maintain any unhealthy dynamic node.
 
@@ -766,6 +767,10 @@ class ClusterManager:
             )
         log.info("Setting unhealthy dynamic nodes to down and power_down.")
         set_nodes_power_down([node.name for node in unhealthy_dynamic_nodes], reason="Scheduler health check failed")
+        for node in unhealthy_dynamic_nodes:
+            self._publish_metric(
+                "WARNING", "Scheduler health check failed", "dynamic_node_health_check_failure", node=node.description()
+            )
 
     @log_exception(log, "maintaining powering down nodes", raise_on_error=False)
     def _handle_powering_down_nodes(self, slurm_nodes):
@@ -812,6 +817,9 @@ class ClusterManager:
         except Exception as e:
             log.error("Encountered exception when retrieving console output from unhealthy static nodes: %s", e)
 
+        for node in unhealthy_static_nodes:
+            self._publish_metric("WARNING", "Unhealthy static node", "unhealthy_static_node", node=node.description())
+
         node_list = [node.name for node in unhealthy_static_nodes]
         # Set nodes into down state so jobs can be requeued immediately
         try:
@@ -828,7 +836,7 @@ class ClusterManager:
                 instances_to_terminate, terminate_batch_size=self._config.terminate_max_batch_size
             )
         log.info("Launching new instances for unhealthy static nodes")
-        self._instance_manager.add_instances_for_nodes(
+        successful_nodes = self._instance_manager.add_instances_for_nodes(
             node_list, self._config.launch_max_batch_size, self._config.update_node_address
         )
         # Add launched nodes to list of nodes being replaced, excluding any nodes that failed to launch
@@ -839,6 +847,24 @@ class ClusterManager:
             "After node maintenance, following nodes are currently in replacement: %s",
             print_with_count(self._static_nodes_in_replacement),
         )
+        for success in successful_nodes:
+            node, instance = success
+            self._publish_metric(
+                "INFO",
+                "After node maintenance, launching node currently in replacement",
+                event_type="static_node_replacement_launch",
+                node=repr(node),
+                instance=repr(instance),
+            )
+        for error_code, failed_node_list in self._instance_manager.failed_nodes.items():
+            for node in failed_node_list:
+                self._publish_metric(
+                    "WARNING",
+                    "After node maintenance, node failed replacement",
+                    event_type="static_node_replacement_failure",
+                    node=repr(node),
+                    error_code=error_code,
+                )
 
     @log_exception(log, "maintaining slurm nodes", catch_exception=Exception, raise_on_error=False)
     def _maintain_nodes(self, partitions_name_map, compute_resource_nodes_map):
@@ -883,7 +909,12 @@ class ClusterManager:
                 instance.launch_time, self._current_time, self._config.orphaned_instance_timeout
             ):
                 instances_to_terminate.append(instance.id)
-
+                self._publish_metric(
+                    "WARNING",
+                    "Found orphaned instance",
+                    "terminating_orphaned_instance",
+                    instance=instance.description(),
+                )
         if instances_to_terminate:
             log.info("Terminating orphaned instances")
             self._instance_manager.delete_instances(
@@ -901,6 +932,16 @@ class ClusterManager:
                 "Setting cluster into protected mode due to failures detected in node provisioning. "
                 "Please investigate the issue and then use 'pcluster update-compute-fleet --status START_REQUESTED' "
                 "command to re-enable the fleet."
+            )
+            self._publish_metric(
+                "WARNING",
+                (
+                    "Setting cluster into protected mode due to failures detected in node provisioning. "
+                    "Please investigate the issue and then use "
+                    "'pcluster update-compute-fleet --status START_REQUESTED' command to re-enable the fleet."
+                ),
+                "cluster_entering_protected_mode",
+                partition_failures=self._partitions_protected_failure_count_map,
             )
             self._update_compute_fleet_status(ComputeFleetStatus.PROTECTED)
 
@@ -992,6 +1033,13 @@ class ClusterManager:
                     node.slurmdstarttime, self._current_time, self._config.health_check_timeout_after_slurmdstarttime
                 ):
                     nodes_name_failing_health_check.add(node.name)
+                    self._publish_metric(
+                        "WARNING",
+                        f"Node failing {health_check_type}",
+                        "node_failed_health_check",
+                        health_check_type=health_check_type,
+                        node=node.description(),
+                    )
                 else:
                     nodes_name_recently_rebooted.add(node.name)
             if len(nodes_name_failing_health_check) > 0:
@@ -1012,6 +1060,12 @@ class ClusterManager:
         for node in active_nodes:
             if node.is_static_nodes_in_replacement and node.is_failing_health_check:
                 failed_health_check_nodes_in_replacement.append(node.name)
+                self._publish_metric(
+                    "WARNING",
+                    "Static node in replacement failed health check",
+                    "static_node_replacement_health_check_failure",
+                    node=node.description,
+                )
 
         if failed_health_check_nodes_in_replacement:
             log.warning(
@@ -1155,6 +1209,16 @@ class ClusterManager:
                     self._insufficient_capacity_compute_resources.setdefault(queue_name, {})[
                         compute_resource
                     ] = ComputeResourceFailureEvent(self._current_time, nodes[0].error_code)
+                    for node in nodes:
+                        self._publish_metric(
+                            "WARNING",
+                            "Node with insufficient capacity",
+                            "insufficient_capacity_node",
+                            queue=queue_name,
+                            compute_resource=compute_resource,
+                            error_code=node.error_code,
+                            node=node.description(),
+                        )
 
     def _reset_timeout_expired_compute_resources(
         self, ice_compute_resources_and_nodes_map: Dict[str, Dict[str, List[SlurmNode]]]

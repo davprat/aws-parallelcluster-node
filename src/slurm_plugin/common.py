@@ -139,23 +139,28 @@ def is_clustermgtd_heartbeat_valid(current_time, clustermgtd_timeout, clustermgt
 
 
 def metric_publisher(metric_logger, cluster_name, component, instance_id, **global_args):
-    def emit_metric(level, message, event_type, **kwargs):
-        try:
-            metric = {
-                "timestamp": datetime.now(timezone.utc).timestamp(),
-                "version": 0,
-                "cluster_name": cluster_name,
-                "component": component,
-                "level": level,
-                "instance_id": instance_id,
-                "event_type": event_type,
-                "message": message,
-            }
-            metric.update(global_args)
-            metric.update(kwargs)
+    def emit_metric(level, message, event_type, log_level=logging.INFO, **kwargs):
+        if metric_logger.isEnabledFor(log_level):
+            try:
+                metric = {
+                    "timestamp": datetime.now(timezone.utc).timestamp(),
+                    "version": 0,
+                    "cluster_name": cluster_name,
+                    "component": component,
+                    "level": level,
+                    "instance_id": instance_id,
+                    "event_type": event_type,
+                    "message": message,
+                }
+                metric.update(global_args)
+                metric.update(kwargs)
 
-            metric_logger.info("%s", json.dumps(metric))
-        except Exception as e:
-            logger.error("Failed to publish metric: %s", e)
+                metric_logger.log(log_level, "%s", json.dumps(metric))
+            except Exception as e:
+                logger.error("Failed to publish metric: %s", e)
 
     return emit_metric
+
+
+def metric_publisher_noop(*args, **kwargs):
+    pass

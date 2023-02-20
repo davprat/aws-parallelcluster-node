@@ -65,6 +65,7 @@ class InstanceManager:
         fleet_config=None,
         run_instances_overrides=None,
         create_fleet_overrides=None,
+        publish_metric=lambda *args, **kwargs: None,
     ):
         """Initialize InstanceLauncher with required attributes."""
         self._region = region
@@ -84,6 +85,7 @@ class InstanceManager:
         self._boto3_resource_factory = lambda resource_name: boto3.session.Session().resource(
             resource_name, region_name=region, config=boto3_config
         )
+        self.publish_metric = publish_metric
 
     def _clear_failed_nodes(self):
         """Clear and reset failed nodes list."""

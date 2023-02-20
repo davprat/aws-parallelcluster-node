@@ -306,6 +306,27 @@ class SlurmNode(metaclass=ABCMeta):
             return error_code
         return None
 
+    def description(self):
+        return {
+            "name": self.name,
+            "address": self.nodeaddr,
+            "hostname": self.nodehostname,
+            "state_string": self.state_string,
+            "states": list(self.states),
+            "partitions": list(self.partitions),
+            "reason": self.reason,
+            "instance": self.instance.description() if self.instance else None,
+            "slurm_start_time": str(self.slurmdstarttime) if self.slurmdstarttime else None,
+            "static_nodes_in_replacement": self.is_static_nodes_in_replacement,
+            "is_being_replaced": self.is_being_replaced,
+            "replacement_timeout": self._is_replacement_timeout,
+            "failing_health_check": self.is_failing_health_check,
+            "error_code": self.error_code,
+            "queue_name": self.queue_name,
+            "node_type": self._node_type,
+            "compute_resource_name": self.compute_resource_name,
+        }
+
     def __eq__(self, other):
         """Compare 2 SlurmNode objects."""
         if isinstance(other, SlurmNode):

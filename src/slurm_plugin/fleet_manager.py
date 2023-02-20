@@ -12,6 +12,7 @@ import copy
 import logging
 import time
 from abc import ABC, abstractmethod
+from typing import Callable
 
 import boto3
 from botocore.exceptions import ClientError
@@ -27,6 +28,15 @@ class EC2Instance:
         self.hostname = hostname
         self.launch_time = launch_time
         self.slurm_node = None
+
+    def description(self):
+        return {
+            "instance_id": self.id,
+            "private_ip": self.private_ip,
+            "hostname": self.hostname,
+            "launch_time": str(self.launch_time),
+            "slurm_node": self.slurm_node,
+        }
 
     def __eq__(self, other):
         """Compare 2 SlurmNode objects."""
@@ -77,6 +87,7 @@ class FleetManagerFactory:
         all_or_nothing,
         run_instances_overrides,
         create_fleet_overrides,
+        publish_metric: Callable = lambda *args, **kwargs: None,
     ):
         try:
             queue_config = fleet_config[queue]
@@ -103,6 +114,7 @@ class FleetManagerFactory:
                 compute_resource_config,
                 all_or_nothing,
                 create_fleet_overrides.get(queue, {}).get(compute_resource, {}),
+                publish_metric=publish_metric,
             )
         elif api == "run-instances":
             return Ec2RunInstancesManager(
@@ -114,6 +126,7 @@ class FleetManagerFactory:
                 compute_resource_config,
                 all_or_nothing,
                 run_instances_overrides.get(queue, {}).get(compute_resource, {}),
+                publish_metric=publish_metric,
             )
         else:
             raise FleetManagerException(
@@ -135,6 +148,7 @@ class FleetManager(ABC):
         compute_resource_config,
         all_or_nothing,
         launch_overrides,
+        publish_metric: Callable,
     ):
         self._cluster_name = cluster_name
         self._region = region
@@ -144,6 +158,7 @@ class FleetManager(ABC):
         self._compute_resource_config = compute_resource_config
         self._all_or_nothing = all_or_nothing
         self._launch_overrides = launch_overrides
+        self._publish_metric = publish_metric
 
     @abstractmethod
     def _evaluate_launch_params(self, count):
@@ -179,6 +194,7 @@ class Ec2RunInstancesManager(FleetManager):
         compute_resource_config,
         all_or_nothing,
         launch_overrides,
+        publish_metric: Callable,
     ):
         super().__init__(
             cluster_name,
@@ -189,6 +205,7 @@ class Ec2RunInstancesManager(FleetManager):
             compute_resource_config,
             all_or_nothing,
             launch_overrides,
+            publish_metric=publish_metric,
         )
 
     def _evaluate_launch_params(self, count):
@@ -215,6 +232,13 @@ class Ec2RunInstancesManager(FleetManager):
             return run_instances(self._region, self._boto3_config, launch_params)
         except ClientError as e:
             logger.error("Failed RunInstances request: %s", e.response.get("ResponseMetadata").get("RequestId"))
+            self._publish_metric(
+                "ERROR",
+                "Failed RunInstances request",
+                "launch_instance_client_error",
+                request_id=e.response.get("ResponseMetadata").get("RequestId"),
+                exception=repr(e),
+            )
             raise e
 
 
@@ -231,6 +255,7 @@ class Ec2CreateFleetManager(FleetManager):
         compute_resource_config,
         all_or_nothing,
         launch_overrides,
+        publish_metric: Callable,
     ):
         super().__init__(
             cluster_name,
@@ -241,6 +266,7 @@ class Ec2CreateFleetManager(FleetManager):
             compute_resource_config,
             all_or_nothing,
             launch_overrides,
+            publish_metric=publish_metric,
         )
 
     def _evaluate_template_overrides(self) -> list:
@@ -352,11 +378,26 @@ class Ec2CreateFleetManager(FleetManager):
                     err.get("ErrorCode"),
                     err.get("ErrorMessage"),
                 )
+                self._publish_metric(
+                    "ERROR",
+                    "Error in CreateFleet request",
+                    "create_fleet_error",
+                    log_level=log_level,
+                    request_id=response.get("ResponseMetadata", {}).get("RequestId"),
+                    error_code=err.get("ErrorCode"),
+                    error_message=err.get("ErrorMessage"),
+                )
 
             instance_ids = [inst_id for instance in instances for inst_id in instance["InstanceIds"]]
             instances, partial_instance_ids = self._get_instances_info(instance_ids)
             if partial_instance_ids:
                 logger.error("Unable to retrieve instance info for instances: %s", partial_instance_ids)
+                self._publish_metric(
+                    "ERROR",
+                    "Unable to retrieve instance info for instances",
+                    "create_fleet_instance_info_error",
+                    instance_ids=partial_instance_ids,
+                )
 
             return {"Instances": instances}
         except ClientError as e:

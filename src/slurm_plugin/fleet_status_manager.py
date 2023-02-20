@@ -21,14 +21,14 @@ from logging.config import fileConfig
 from botocore.config import Config
 from common.schedulers.slurm_commands import resume_powering_down_nodes, update_all_partitions
 from slurm_plugin.clustermgtd import ComputeFleetStatus, ComputeFleetStatusManager
-from slurm_plugin.common import log_exception, metric_publisher
+from slurm_plugin.common import log_exception, metric_publisher, metric_publisher_noop
 from slurm_plugin.instance_manager import InstanceManager
 from slurm_plugin.slurm_resources import CONFIG_FILE_DIR, PartitionStatus
 
 log = logging.getLogger(__name__)
 metrics_logger = log.getChild("metrics")
 
-_publish_metric = None
+_publish_metric = metric_publisher_noop
 
 
 class SlurmFleetManagerConfig:
@@ -103,9 +103,7 @@ def _stop_partitions(config):
     log.info("Setting slurm partitions to INACTIVE and terminating all compute nodes...")
     update_all_partitions(PartitionStatus.INACTIVE, reset_node_addrs_hostname=True)
     instance_manager = InstanceManager(
-        config.region,
-        config.cluster_name,
-        config.boto3_config,
+        config.region, config.cluster_name, config.boto3_config, publish_metric=_publish_metric
     )
     instance_manager.terminate_all_compute_nodes(config.terminate_max_batch_size)
 

@@ -17,10 +17,13 @@ from configparser import ConfigParser
 from datetime import datetime, timezone
 from logging.config import fileConfig
 
-from slurm_plugin.common import is_clustermgtd_heartbeat_valid
+from slurm_plugin.common import is_clustermgtd_heartbeat_valid, metric_publisher, metric_publisher_noop
 from slurm_plugin.slurm_resources import CONFIG_FILE_DIR
 
 log = logging.getLogger(__name__)
+metrics_logger = log.getChild("metrics")
+
+_publish_metric = metric_publisher_noop
 
 
 class SlurmSuspendConfig:
@@ -46,6 +49,8 @@ class SlurmSuspendConfig:
         self.logging_config = config.get(
             "slurm_suspend", "logging_config", fallback=self.DEFAULTS.get("logging_config")
         )
+        self.cluster_name = config.get("slurm_suspend", "cluster_name", fallback="unknown")
+        self.head_node_instance_id = config.get("slurm_suspend", "instance_id", fallback="unknown")
         log.info(self.__repr__())
 
 
@@ -73,20 +78,26 @@ def main():
             e,
         )
 
+    global _publish_metric
+    _publish_metric = metric_publisher(
+        metrics_logger, suspend_config.cluster_name, "slurm_suspend", suspend_config.head_node_instance_id
+    )
+
     log.info("Suspending following nodes. Clustermgtd will cleanup orphaned instances: %s", args.nodes)
     current_time = datetime.now(tz=timezone.utc)
     if not is_clustermgtd_heartbeat_valid(
         current_time, suspend_config.clustermgtd_timeout, suspend_config.clustermgtd_heartbeat_file_path
     ):
-        log.error(
-            "No valid clustermgtd heartbeat detected, clustermgtd is down! "
-            "Please check clustermgtd log for error.\n"
-            "Nodes will be reset to POWER_SAVE state after SuspendTimeout. "
-            "The backing EC2 instances may not be correctly terminated.\n"
-            "Please check and terminate any orphaned instances in EC2!"
-        )
+        error_message = "No valid clustermgtd heartbeat detected, clustermgtd is down! "
+        "Please check clustermgtd log for error.\n"
+        "Nodes will be reset to POWER_SAVE state after SuspendTimeout. "
+        "The backing EC2 instances may not be correctly terminated.\n"
+        "Please check and terminate any orphaned instances in EC2!"
+        log.error(error_message)
+        _publish_metric("ERROR", error_message, "suspend_error", nodes=args.nodes)
     else:
         log.info("SuspendProgram finished. Nodes will be available after SuspendTimeout")
+        _publish_metric("INFO", "Node Suspended", "suspend_node", nodes=args.nodes)
 
 
 if __name__ == "__main__":
