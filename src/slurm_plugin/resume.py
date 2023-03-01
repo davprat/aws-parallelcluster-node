@@ -16,6 +16,7 @@ import os
 from configparser import ConfigParser
 from datetime import datetime, timezone
 from logging.config import fileConfig
+from typing import Callable
 
 from botocore.config import Config
 from common.schedulers.slurm_commands import get_nodes_info, set_nodes_down
@@ -32,7 +33,7 @@ from slurm_plugin.slurm_resources import CONFIG_FILE_DIR
 log = logging.getLogger(__name__)
 metrics_logger = log.getChild("metrics")
 
-_publish_metric = metric_publisher_noop
+_publish_metric: Callable = metric_publisher_noop
 
 
 class SlurmResumeConfig:
@@ -154,8 +155,10 @@ def _handle_failed_nodes(node_list, reason="Failure when resuming nodes"):
                 "WARNING",
                 "Setting failed node to DOWN state",
                 event_type="node_launch_failure",
-                reason=reason,
-                node={"name": node},
+                detail={
+                    "reason": reason,
+                    "node": {"name": node},
+                },
             )
         set_nodes_down(node_list, reason=reason)
     except Exception as e:
@@ -209,7 +212,13 @@ def _resume(arg_nodes, resume_config):
     for success in successful_nodes:
         node, instance = success
         _publish_metric(
-            "INFO", "Launched Node", event_type="successful_node", node={"name": node}, instance=instance.description()
+            "INFO",
+            "Launched Node",
+            event_type="successful_node",
+            detail={
+                "node": {"name": node},
+                "instance": instance.description(),
+            },
         )
 
     if failed_nodes:
@@ -247,7 +256,7 @@ def main():
             )
         global _publish_metric
         _publish_metric = metric_publisher(
-            metrics_logger, resume_config.cluster_name, "slurm_resume", resume_config.head_node_instance_id
+            metrics_logger, resume_config.cluster_name, "HeadNode", "slurm_resume", resume_config.head_node_instance_id
         )
 
         log.info("ResumeProgram config: %s", resume_config)

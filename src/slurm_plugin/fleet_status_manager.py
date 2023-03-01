@@ -17,6 +17,7 @@ import os
 import sys
 from configparser import ConfigParser
 from logging.config import fileConfig
+from typing import Callable
 
 from botocore.config import Config
 from common.schedulers.slurm_commands import resume_powering_down_nodes, update_all_partitions
@@ -28,7 +29,7 @@ from slurm_plugin.slurm_resources import CONFIG_FILE_DIR, PartitionStatus
 log = logging.getLogger(__name__)
 metrics_logger = log.getChild("metrics")
 
-_publish_metric = metric_publisher_noop
+_publish_metric: Callable = metric_publisher_noop
 
 
 class SlurmFleetManagerConfig:
@@ -119,7 +120,9 @@ def _get_computefleet_status(computefleet_status_data_path):
                 "INFO",
                 "Compute fleet status",
                 event_type="compute_fleet_status",
-                computefleet_status=computefleet_status_json,
+                detail={
+                    "computefleet_status": computefleet_status_json,
+                },
             )
         log.info("ComputeFleet status is: %s", computefleet_status)
     except Exception as e:
@@ -127,8 +130,10 @@ def _get_computefleet_status(computefleet_status_data_path):
         _publish_metric(
             "ERROR",
             f"Cannot read compute fleet status data file: {computefleet_status_data_path}",
-            event_type="compute_fleet_status_error",
-            exception=repr(e),
+            event_type="compute_fleet_status_exception",
+            detail={
+                "exception": repr(e),
+            },
         )
         raise
 
@@ -163,6 +168,7 @@ def main():
         _publish_metric = metric_publisher(
             metrics_logger,
             fleet_status_manager_config.cluster_name,
+            "HeadNode",
             "fleet_status_manager",
             fleet_status_manager_config.instance_id,
         )

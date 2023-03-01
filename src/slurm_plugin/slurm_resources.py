@@ -13,7 +13,7 @@ import logging
 import re
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from common.utils import time_is_up
@@ -119,6 +119,7 @@ class SlurmNode(metaclass=ABCMeta):
         reason=None,
         instance=None,
         slurmdstarttime: datetime = None,
+        lastbusytime: datetime = None,
     ):
         """Initialize slurm node with attributes."""
         self.name = name
@@ -130,6 +131,7 @@ class SlurmNode(metaclass=ABCMeta):
         self.reason = reason
         self.instance = instance
         self.slurmdstarttime = slurmdstarttime
+        self.lastbusytime = lastbusytime
         self.is_static_nodes_in_replacement = False
         self.is_being_replaced = False
         self._is_replacement_timeout = False
@@ -307,17 +309,23 @@ class SlurmNode(metaclass=ABCMeta):
         return None
 
     def description(self):
+        now = datetime.now(tz=timezone.utc)
+        states = list(self.states)
         return {
             "name": self.name,
             "address": self.nodeaddr,
             "hostname": self.nodehostname,
-            "state_string": self.state_string,
-            "states": list(self.states),
+            "state_string": "+".join([*states[:1], *sorted(states[1:])]),
+            "state": str(*states[:1]),
+            "state_flags": sorted(states[1:]),
             "partitions": list(self.partitions),
             "reason": self.reason,
             "instance": self.instance.description() if self.instance else None,
-            "slurm_start_time": str(self.slurmdstarttime) if self.slurmdstarttime else None,
-            "static_nodes_in_replacement": self.is_static_nodes_in_replacement,
+            "slurm_start_time": self.slurmdstarttime.isoformat(timespec="seconds") if self.slurmdstarttime else None,
+            "up_time": (now - self.slurmdstarttime).total_seconds() if self.slurmdstarttime else 0,
+            "idle_time": (now - self.lastbusytime).total_seconds() if self.lastbusytime else 0,
+            "is_running_job": self.is_running_job(),
+            "static_node_in_replacement": self.is_static_nodes_in_replacement,
             "is_being_replaced": self.is_being_replaced,
             "replacement_timeout": self._is_replacement_timeout,
             "failing_health_check": self.is_failing_health_check,
@@ -346,10 +354,21 @@ class SlurmNode(metaclass=ABCMeta):
 
 class StaticNode(SlurmNode):
     def __init__(
-        self, name, nodeaddr, nodehostname, state, partitions=None, reason=None, instance=None, slurmdstarttime=None
+        self,
+        name,
+        nodeaddr,
+        nodehostname,
+        state,
+        partitions=None,
+        reason=None,
+        instance=None,
+        slurmdstarttime=None,
+        lastbusytime=None,
     ):
         """Initialize slurm node with attributes."""
-        super().__init__(name, nodeaddr, nodehostname, state, partitions, reason, instance, slurmdstarttime)
+        super().__init__(
+            name, nodeaddr, nodehostname, state, partitions, reason, instance, slurmdstarttime, lastbusytime
+        )
 
     def is_healthy(self, terminate_drain_nodes, terminate_down_nodes, log_warn_if_unhealthy=True):
         """Check if a slurm node is considered healthy."""
@@ -440,10 +459,21 @@ class StaticNode(SlurmNode):
 
 class DynamicNode(SlurmNode):
     def __init__(
-        self, name, nodeaddr, nodehostname, state, partitions=None, reason=None, instance=None, slurmdstarttime=None
+        self,
+        name,
+        nodeaddr,
+        nodehostname,
+        state,
+        partitions=None,
+        reason=None,
+        instance=None,
+        slurmdstarttime=None,
+        lastbusytime=None,
     ):
         """Initialize slurm node with attributes."""
-        super().__init__(name, nodeaddr, nodehostname, state, partitions, reason, instance, slurmdstarttime)
+        super().__init__(
+            name, nodeaddr, nodehostname, state, partitions, reason, instance, slurmdstarttime, lastbusytime
+        )
 
     def is_state_healthy(self, terminate_drain_nodes, terminate_down_nodes, log_warn_if_unhealthy=True):
         """Check if a slurm node's scheduler state is considered healthy."""

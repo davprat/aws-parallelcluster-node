@@ -372,7 +372,10 @@ def _parse_nodes_info(slurm_node_info: str) -> List[SlurmNode]:
         "Partitions": "partitions",
         "Reason": "reason",
         "SlurmdStartTime": "slurmdstarttime",
+        "LastBusyTime": "lastbusytime",
     }
+
+    date_fields = ["SlurmdStartTime", "LastBusyTime", "BootTime"]
 
     node_info = slurm_node_info.split("######\n")
     slurm_nodes = []
@@ -381,7 +384,7 @@ def _parse_nodes_info(slurm_node_info: str) -> List[SlurmNode]:
         kwargs = {}
         for line in lines:
             key, value = line.split("=")
-            if key == "SlurmdStartTime":
+            if key in date_fields:
                 if value != "None":
                     value = datetime.strptime(value, "%Y-%m-%dT%H:%M:%S").astimezone(tz=timezone.utc)
                 else:

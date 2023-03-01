@@ -138,24 +138,46 @@ def is_clustermgtd_heartbeat_valid(current_time, clustermgtd_timeout, clustermgt
         return False
 
 
-def metric_publisher(metric_logger, cluster_name, component, instance_id, **global_args):
-    def emit_metric(level, message, event_type, log_level=logging.INFO, **kwargs):
+metric_levels = {
+    "CRITICAL": logging.CRITICAL,
+    "FATAL": logging.CRITICAL,
+    "ERROR": logging.ERROR,
+    "WARNING": logging.WARNING,
+    "WARN": logging.WARNING,
+    "INFO": logging.INFO,
+    "DEBUG": logging.DEBUG,
+    "NOTSET": logging.NOTSET,
+}
+
+
+def metric_publisher(metric_logger, cluster_name, node_role, component, instance_id, **global_args):
+    def emit_metric(level, message, event_type, event_supplier=None, **kwargs):
+        log_level = metric_levels.get(level, logging.NOTSET)
         if metric_logger.isEnabledFor(log_level):
             try:
-                metric = {
-                    "timestamp": datetime.now(timezone.utc).timestamp(),
-                    "version": 0,
-                    "cluster_name": cluster_name,
-                    "component": component,
-                    "level": level,
-                    "instance_id": instance_id,
-                    "event_type": event_type,
-                    "message": message,
-                }
-                metric.update(global_args)
-                metric.update(kwargs)
+                now = datetime.now(timezone.utc)
+                if not event_supplier:
+                    event_supplier = [kwargs]
+                for details in event_supplier:
+                    metric = {
+                        "datetime": now.isoformat(timespec="milliseconds"),
+                        "timestamp": now.timestamp(),
+                        "version": 0,
+                        "cluster_name": cluster_name,
+                        "node_role": node_role,
+                        "component": component,
+                        "level": level,
+                        "instance_id": instance_id,
+                        "event_type": event_type,
+                        "message": message,
+                    }
+                    metric.update(global_args)
+                    if kwargs:
+                        metric.update(kwargs)
+                    metric.update(details)
 
-                metric_logger.log(log_level, "%s", json.dumps(metric))
+                    metric_logger.log(log_level, "%s", json.dumps(metric))
+
             except Exception as e:
                 logger.error("Failed to publish metric: %s", e)
 

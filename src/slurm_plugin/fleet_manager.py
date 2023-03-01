@@ -235,9 +235,11 @@ class Ec2RunInstancesManager(FleetManager):
             self._publish_metric(
                 "ERROR",
                 "Failed RunInstances request",
-                "launch_instance_client_error",
-                request_id=e.response.get("ResponseMetadata").get("RequestId"),
-                exception=repr(e),
+                "launch_instance_client_exception",
+                detail={
+                    "request_id": e.response.get("ResponseMetadata").get("RequestId"),
+                    "exception": repr(e),
+                },
             )
             raise e
 
@@ -379,13 +381,14 @@ class Ec2CreateFleetManager(FleetManager):
                     err.get("ErrorMessage"),
                 )
                 self._publish_metric(
-                    "ERROR",
+                    "WARNING" if instances else "ERROR",
                     "Error in CreateFleet request",
                     "create_fleet_error",
-                    log_level=log_level,
-                    request_id=response.get("ResponseMetadata", {}).get("RequestId"),
-                    error_code=err.get("ErrorCode"),
-                    error_message=err.get("ErrorMessage"),
+                    detail={
+                        "request_id": response.get("ResponseMetadata", {}).get("RequestId"),
+                        "error_code": err.get("ErrorCode"),
+                        "error_message": err.get("ErrorMessage"),
+                    },
                 )
 
             instance_ids = [inst_id for instance in instances for inst_id in instance["InstanceIds"]]
@@ -396,7 +399,9 @@ class Ec2CreateFleetManager(FleetManager):
                     "ERROR",
                     "Unable to retrieve instance info for instances",
                     "create_fleet_instance_info_error",
-                    instance_ids=partial_instance_ids,
+                    detail={
+                        "instance_ids": partial_instance_ids,
+                    },
                 )
 
             return {"Instances": instances}

@@ -938,6 +938,7 @@ def test_handle_powering_down_nodes(
         "output_enabled",
         "set_nodes_down_exception",
         "sample_size",
+        "expected_warnings",
     ),
     [
         (
@@ -968,6 +969,13 @@ def test_handle_powering_down_nodes(
             True,
             None,
             100,
+            [
+                r'{"datetime": ".*", "timestamp": \d+(.\d*)?, "version": 0, "cluster_name": "hit-test", '
+                r'"node_role": "HeadNode", '
+                r'"component": "clustermgtd", "level": "WARNING", "instance_id": "i-instance-id", '
+                r'"event_type": "unhealthy_static_node_count", "message": "Unhealthy static node count", '
+                r'"detail": {"count": 3}}',
+            ],
         ),
         (
             {"current-queue1-st-c5xlarge-6"},
@@ -993,6 +1001,12 @@ def test_handle_powering_down_nodes(
             False,
             None,
             1,
+            [
+                r'{"datetime": ".*", "timestamp": \d+(\.\d*)?, "version": 0, "cluster_name": "hit-test", '
+                r'"node_role": "HeadNode", "component": "clustermgtd", "level": "WARNING", '
+                r'"instance_id": "i-instance-id", "event_type": "unhealthy_static_node_count", '
+                r'"message": "Unhealthy static node count", "detail": {"count": 3}}',
+            ],
         ),
         (
             {"current-queue1-st-c5xlarge-6"},
@@ -1012,6 +1026,20 @@ def test_handle_powering_down_nodes(
             False,
             None,
             1,
+            [
+                r'{"datetime": ".*", "timestamp": \d+(\.\d*)?, "version": 0, "cluster_name": "hit-test", '
+                r'"node_role": "HeadNode", '
+                r'"component": "clustermgtd", "level": "WARNING", "instance_id": "i-instance-id", '
+                r'"event_type": "unhealthy_static_node_count", "message": "Unhealthy static node count", '
+                r'"detail": {"count": 3}}',
+                r"Failed to launch instances due to limited EC2 capacity for following nodes: .*",
+                r'{"datetime": ".*", "timestamp": \d+(\.\d*)?, "version": 0, "cluster_name": "hit-test", '
+                r'"node_role": "HeadNode", '
+                r'"component": "clustermgtd", "level": "WARNING", "instance_id": "i-instance-id", '
+                r'"event_type": "static_node_replacement_failure_count", '
+                r'"message": "After node maintenance, node failed replacement count", '
+                r'"detail": {"error_code": "LimitedInstanceCapacity", "count": 1}}',
+            ],
         ),
         (
             {"current-queue1-st-c5xlarge-6"},
@@ -1031,6 +1059,7 @@ def test_handle_powering_down_nodes(
             False,
             Exception,
             1,
+            [],
         ),
     ],
     ids=["basic", "no_associated_instances", "partial_launch", "set_nodes_down_exception"],
@@ -1049,6 +1078,7 @@ def test_handle_unhealthy_static_nodes(
     output_enabled,
     set_nodes_down_exception,
     sample_size,
+    expected_warnings,
 ):
     # Test setup
     mock_sync_config = SimpleNamespace(
@@ -1133,8 +1163,9 @@ def test_handle_unhealthy_static_nodes(
     else:
         cluster_manager._instance_manager.delete_instances.assert_not_called()
     cluster_manager._instance_manager.add_instances_for_nodes.assert_called_with(add_node_list, 5, True)
-    if "partial_launch" not in request.node.name:
-        assert_that(caplog.text).is_empty()
+    assert_that(caplog.records).is_length(len(expected_warnings))
+    for actual, expected in zip(caplog.records, expected_warnings):
+        assert_that(actual.message).matches(expected)
     assert_that(cluster_manager._static_nodes_in_replacement).is_equal_to(expected_replacing_nodes)
     report_mock.assert_called_once()
 
@@ -1780,13 +1811,53 @@ def test_manage_cluster(
             # failures: All failure tolerant module will have an exception, but the program should not crash
             "default.conf",
             [
-                StaticNode("queue-st-c5xlarge-1", "ip-1", "hostname", "DOWN+CLOUD", "queue1"),
-                DynamicNode("queue-dy-c5xlarge-2", "ip-2", "hostname", "DOWN+CLOUD", "queue1"),
-                DynamicNode("queue-dy-c5xlarge-3", "ip-3", "hostname", "IDLE+CLOUD", "queue1"),
+                StaticNode(
+                    "queue-st-c5xlarge-1",
+                    "ip-1",
+                    "hostname",
+                    "DOWN+CLOUD",
+                    "queue1",
+                    slurmdstarttime=datetime(2020, 1, 1, tzinfo=timezone.utc),
+                    lastbusytime=datetime(2023, 2, 28, tzinfo=timezone.utc),
+                ),
+                DynamicNode(
+                    "queue-dy-c5xlarge-2",
+                    "ip-2",
+                    "hostname",
+                    "DOWN+CLOUD",
+                    "queue1",
+                    slurmdstarttime=datetime(2020, 1, 1, tzinfo=timezone.utc),
+                    lastbusytime=datetime(2023, 2, 28, tzinfo=timezone.utc),
+                ),
+                DynamicNode(
+                    "queue-dy-c5xlarge-3",
+                    "ip-3",
+                    "hostname",
+                    "IDLE+CLOUD",
+                    "queue1",
+                    slurmdstarttime=datetime(2020, 1, 1, tzinfo=timezone.utc),
+                    lastbusytime=datetime(2023, 2, 28, tzinfo=timezone.utc),
+                ),
             ],
             [
-                StaticNode("queue-st-c5xlarge-4", "ip-4", "hostname", "IDLE+CLOUD", "queue2"),
-                DynamicNode("queue-dy-c5xlarge-5", "ip-5", "hostname", "DOWN+CLOUD", "queue2"),
+                StaticNode(
+                    "queue-st-c5xlarge-4",
+                    "ip-4",
+                    "hostname",
+                    "IDLE+CLOUD",
+                    "queue2",
+                    slurmdstarttime=datetime(2020, 1, 1, tzinfo=timezone.utc),
+                    lastbusytime=datetime(2023, 2, 28, tzinfo=timezone.utc),
+                ),
+                DynamicNode(
+                    "queue-dy-c5xlarge-5",
+                    "ip-5",
+                    "hostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    slurmdstarttime=datetime(2020, 1, 1, tzinfo=timezone.utc),
+                    lastbusytime=datetime(2023, 2, 28, tzinfo=timezone.utc),
+                ),
             ],
             [
                 # _get_ec2_instances: get all cluster instances by tags
@@ -1990,7 +2061,14 @@ def test_manage_cluster(
             Exception,
             [],
             [{}],
-            ["Unable to get partition/node info from slurm, no other action can be performed"],
+            [
+                "Unable to get partition/node info from slurm, no other action can be performed",
+                r'{"datetime": ".*", "timestamp": \d+(\.\d+)?, "version": 0, "cluster_name": "hit", '
+                r'"node_role": "HeadNode", '
+                r'"component": "clustermgtd", "level": "ERROR", "instance_id": "unknown", '
+                r'"event_type": "slurm_exception", "message": "Slurm Exception",'
+                r' "detail": {"exception": "Exception.*"}}',
+            ],
         ),
     ],
     ids=["basic", "failures", "critical_failure_1", "critical_failure_2"],
@@ -2047,7 +2125,7 @@ def test_manage_cluster_boto3(
     cluster_manager._instance_manager._update_dns_hostnames = mocker.MagicMock()
     cluster_manager.manage_cluster()
 
-    assert_that(expected_error_messages).is_length(len(caplog.records))
+    assert_that(caplog.records).is_length(len(expected_error_messages))
     for actual, expected in zip(caplog.records, expected_error_messages):
         assert_that(actual.message).matches(expected)
 
