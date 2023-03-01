@@ -126,6 +126,8 @@ class SlurmNode(metaclass=ABCMeta):
         self.nodeaddr = nodeaddr
         self.nodehostname = nodehostname
         self.state_string = state
+        state_list = state.split("+")
+        self._ordered_state = [*state_list[:1], *sorted(state_list[1:])]
         self.states = set(state.split("+"))
         self.partitions = partitions.strip().split(",") if partitions else None
         self.reason = reason
@@ -308,31 +310,53 @@ class SlurmNode(metaclass=ABCMeta):
             return error_code
         return None
 
+    @property
+    def canonical_state_string(self):
+        return "+".join(self._ordered_state)
+
+    @property
+    def canonical_state(self):
+        return str(*self._ordered_state[:1])
+
+    @property
+    def canonical_state_flags(self):
+        return self._ordered_state[1:]
+
+    @property
+    def slurmd_started_time(self):
+        return self.slurmdstarttime.isoformat(timespec="seconds") if self.slurmdstarttime else None
+
+    @property
+    def up_time(self):
+        return (datetime.now(tz=timezone.utc) - self.slurmdstarttime).total_seconds() if self.slurmdstarttime else 0
+
+    @property
+    def idle_time(self):
+        return (datetime.now(tz=timezone.utc) - self.lastbusytime).total_seconds() if self.lastbusytime else 0
+
     def description(self):
-        now = datetime.now(tz=timezone.utc)
-        states = list(self.states)
         return {
-            "name": self.name,
+            "node-name": self.name,
             "address": self.nodeaddr,
             "hostname": self.nodehostname,
-            "state_string": "+".join([*states[:1], *sorted(states[1:])]),
-            "state": str(*states[:1]),
-            "state_flags": sorted(states[1:]),
-            "partitions": list(self.partitions),
+            "state-string": self.canonical_state_string,
+            "state": self.canonical_state,
+            "state-flags": self.canonical_state_flags,
+            "partitions": list(self.partitions) if self.partitions else None,
+            "queue-name": self.queue_name,
+            "compute-resource": self.compute_resource_name,
+            "node-type": self._node_type,
+            "instance": self.instance.description() if self.instance else "None",
+            "slurm-start-time": self.slurmd_started_time,
+            "up-time": self.up_time,
+            "idle-time": self.idle_time,
+            "is-running-job": self.is_running_job(),
+            "static-node-in-replacement": self.is_static_nodes_in_replacement,
+            "is-being-replaced": self.is_being_replaced,
+            "replacement-timeout": self._is_replacement_timeout,
+            "failing-health-check": self.is_failing_health_check,
+            "error-code": self.error_code,
             "reason": self.reason,
-            "instance": self.instance.description() if self.instance else None,
-            "slurm_start_time": self.slurmdstarttime.isoformat(timespec="seconds") if self.slurmdstarttime else None,
-            "up_time": (now - self.slurmdstarttime).total_seconds() if self.slurmdstarttime else 0,
-            "idle_time": (now - self.lastbusytime).total_seconds() if self.lastbusytime else 0,
-            "is_running_job": self.is_running_job(),
-            "static_node_in_replacement": self.is_static_nodes_in_replacement,
-            "is_being_replaced": self.is_being_replaced,
-            "replacement_timeout": self._is_replacement_timeout,
-            "failing_health_check": self.is_failing_health_check,
-            "error_code": self.error_code,
-            "queue_name": self.queue_name,
-            "node_type": self._node_type,
-            "compute_resource_name": self.compute_resource_name,
         }
 
     def __eq__(self, other):
@@ -367,7 +391,15 @@ class StaticNode(SlurmNode):
     ):
         """Initialize slurm node with attributes."""
         super().__init__(
-            name, nodeaddr, nodehostname, state, partitions, reason, instance, slurmdstarttime, lastbusytime
+            name,
+            nodeaddr,
+            nodehostname,
+            state,
+            partitions,
+            reason,
+            instance,
+            slurmdstarttime,
+            lastbusytime=lastbusytime,
         )
 
     def is_healthy(self, terminate_drain_nodes, terminate_down_nodes, log_warn_if_unhealthy=True):
@@ -472,7 +504,15 @@ class DynamicNode(SlurmNode):
     ):
         """Initialize slurm node with attributes."""
         super().__init__(
-            name, nodeaddr, nodehostname, state, partitions, reason, instance, slurmdstarttime, lastbusytime
+            name,
+            nodeaddr,
+            nodehostname,
+            state,
+            partitions,
+            reason,
+            instance,
+            slurmdstarttime,
+            lastbusytime=lastbusytime,
         )
 
     def is_state_healthy(self, terminate_drain_nodes, terminate_down_nodes, log_warn_if_unhealthy=True):

@@ -173,6 +173,7 @@ def test_is_static_node(nodename, expected_is_static):
             "NodeHostName=multiple-dy-c5xlarge-5\n"
             "State=IDLE+CLOUD+POWER\n"
             "SlurmdStartTime=2023-01-23T17:57:07\n"
+            "LastBusyTime=2023-01-23T17:57:07\n"
             # missing partitions
             "######\n"
             # Invalid node name
@@ -191,6 +192,7 @@ def test_is_static_node(nodename, expected_is_static):
                     "IDLE+CLOUD+POWER",
                     None,
                     slurmdstarttime=datetime(2023, 1, 23, 17, 57, 7).astimezone(tz=timezone.utc),
+                    lastbusytime=datetime(2023, 1, 23, 17, 57, 7).astimezone(tz=timezone.utc),
                 ),
             ],
             True,
@@ -904,6 +906,7 @@ def test_get_nodes_info(nodes, cmd_timeout, run_command_call, run_command_side_e
                 "Reason=Reboot ASAP : reboot issued [slurm@2023-01-26T10:11:39]\n######\n"
                 "NodeName=queue1-st-compute-resource-1-2\nNodeAddr=192.168.123.192\n"
                 "NodeHostName=queue1-st-compute-resource-1-2\nState=DOWN+CLOUD+REBOOT_ISSUED\nPartitions=queue1\n"
+                "LastBusyTime=2023-01-26T09:57:15\n"
                 "SlurmdStartTime=2023-01-26T09:57:16\n"
                 "Reason=Reboot ASAP : reboot issued [slurm@2023-01-26T10:11:40]\n######\n"
             ),

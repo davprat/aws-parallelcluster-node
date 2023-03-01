@@ -61,7 +61,7 @@ SINFO = f"{SLURM_BINARIES_DIR}/sinfo"
 SCONTROL_OUTPUT_AWK_PARSER = (
     'awk \'BEGIN{{RS="\\n\\n" ; ORS="######\\n";}} {{print}}\' | '
     + "grep -oP '^(NodeName=\\S+)|(NodeAddr=\\S+)|(NodeHostName=\\S+)|(?<!Next)(State=\\S+)|"
-    + "(Partitions=\\S+)|(SlurmdStartTime=\\S+)|(Reason=.*)|(######)'"
+    + "(Partitions=\\S+)|(SlurmdStartTime=\\S+)|(LastBusyTime=\\S+)|(Reason=.*)|(######)'"
 )
 
 # Set default timeouts for running different slurm commands.

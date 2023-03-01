@@ -13,6 +13,8 @@
 import functools
 import json
 import logging
+import sys
+import traceback
 from concurrent.futures import Future
 from datetime import datetime, timezone
 from typing import Callable, Optional, Protocol, TypedDict
@@ -154,21 +156,21 @@ def metric_publisher(metric_logger, cluster_name, node_role, component, instance
     def emit_metric(level, message, event_type, event_supplier=None, **kwargs):
         log_level = metric_levels.get(level, logging.NOTSET)
         if metric_logger.isEnabledFor(log_level):
-            try:
-                now = datetime.now(timezone.utc)
-                if not event_supplier:
-                    event_supplier = [kwargs]
-                for details in event_supplier:
+            now = datetime.now(timezone.utc)
+            if not event_supplier:
+                event_supplier = [kwargs]
+            for details in event_supplier:
+                try:
                     metric = {
                         "datetime": now.isoformat(timespec="milliseconds"),
                         "timestamp": now.timestamp(),
                         "version": 0,
-                        "cluster_name": cluster_name,
-                        "node_role": node_role,
+                        "cluster-name": cluster_name,
+                        "node-role": node_role,
                         "component": component,
                         "level": level,
-                        "instance_id": instance_id,
-                        "event_type": event_type,
+                        "instance-id": instance_id,
+                        "event-type": event_type,
                         "message": message,
                     }
                     metric.update(global_args)
@@ -177,9 +179,8 @@ def metric_publisher(metric_logger, cluster_name, node_role, component, instance
                     metric.update(details)
 
                     metric_logger.log(log_level, "%s", json.dumps(metric))
-
-            except Exception as e:
-                logger.error("Failed to publish metric: %s", e)
+                except Exception:
+                    logger.error("Failed to publish metric: %s", traceback.format_exception(*sys.exc_info()))
 
     return emit_metric
 

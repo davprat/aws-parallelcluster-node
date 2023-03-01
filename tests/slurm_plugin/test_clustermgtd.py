@@ -970,10 +970,10 @@ def test_handle_powering_down_nodes(
             None,
             100,
             [
-                r'{"datetime": ".*", "timestamp": \d+(.\d*)?, "version": 0, "cluster_name": "hit-test", '
-                r'"node_role": "HeadNode", '
-                r'"component": "clustermgtd", "level": "WARNING", "instance_id": "i-instance-id", '
-                r'"event_type": "unhealthy_static_node_count", "message": "Unhealthy static node count", '
+                r'{"datetime": ".*", "timestamp": \d+(.\d*)?, "version": 0, "cluster-name": "hit-test", '
+                r'"node-role": "HeadNode", '
+                r'"component": "clustermgtd", "level": "WARNING", "instance-id": "i-instance-id", '
+                r'"event-type": "unhealthy_static_node_count", "message": "Unhealthy static node count", '
                 r'"detail": {"count": 3}}',
             ],
         ),
@@ -1002,9 +1002,9 @@ def test_handle_powering_down_nodes(
             None,
             1,
             [
-                r'{"datetime": ".*", "timestamp": \d+(\.\d*)?, "version": 0, "cluster_name": "hit-test", '
-                r'"node_role": "HeadNode", "component": "clustermgtd", "level": "WARNING", '
-                r'"instance_id": "i-instance-id", "event_type": "unhealthy_static_node_count", '
+                r'{"datetime": ".*", "timestamp": \d+(\.\d*)?, "version": 0, "cluster-name": "hit-test", '
+                r'"node-role": "HeadNode", "component": "clustermgtd", "level": "WARNING", '
+                r'"instance-id": "i-instance-id", "event-type": "unhealthy_static_node_count", '
                 r'"message": "Unhealthy static node count", "detail": {"count": 3}}',
             ],
         ),
@@ -1027,16 +1027,16 @@ def test_handle_powering_down_nodes(
             None,
             1,
             [
-                r'{"datetime": ".*", "timestamp": \d+(\.\d*)?, "version": 0, "cluster_name": "hit-test", '
-                r'"node_role": "HeadNode", '
-                r'"component": "clustermgtd", "level": "WARNING", "instance_id": "i-instance-id", '
-                r'"event_type": "unhealthy_static_node_count", "message": "Unhealthy static node count", '
+                r'{"datetime": ".*", "timestamp": \d+(\.\d*)?, "version": 0, "cluster-name": "hit-test", '
+                r'"node-role": "HeadNode", '
+                r'"component": "clustermgtd", "level": "WARNING", "instance-id": "i-instance-id", '
+                r'"event-type": "unhealthy_static_node_count", "message": "Unhealthy static node count", '
                 r'"detail": {"count": 3}}',
                 r"Failed to launch instances due to limited EC2 capacity for following nodes: .*",
-                r'{"datetime": ".*", "timestamp": \d+(\.\d*)?, "version": 0, "cluster_name": "hit-test", '
-                r'"node_role": "HeadNode", '
-                r'"component": "clustermgtd", "level": "WARNING", "instance_id": "i-instance-id", '
-                r'"event_type": "static_node_replacement_failure_count", '
+                r'{"datetime": ".*", "timestamp": \d+(\.\d*)?, "version": 0, "cluster-name": "hit-test", '
+                r'"node-role": "HeadNode", '
+                r'"component": "clustermgtd", "level": "WARNING", "instance-id": "i-instance-id", '
+                r'"event-type": "static_node_replacement_failure_count", '
                 r'"message": "After node maintenance, node failed replacement count", '
                 r'"detail": {"error_code": "LimitedInstanceCapacity", "count": 1}}',
             ],
@@ -2063,10 +2063,10 @@ def test_manage_cluster(
             [{}],
             [
                 "Unable to get partition/node info from slurm, no other action can be performed",
-                r'{"datetime": ".*", "timestamp": \d+(\.\d+)?, "version": 0, "cluster_name": "hit", '
-                r'"node_role": "HeadNode", '
-                r'"component": "clustermgtd", "level": "ERROR", "instance_id": "unknown", '
-                r'"event_type": "slurm_exception", "message": "Slurm Exception",'
+                r'{"datetime": ".*", "timestamp": \d+(\.\d+)?, "version": 0, "cluster-name": "hit", '
+                r'"node-role": "HeadNode", '
+                r'"component": "clustermgtd", "level": "ERROR", "instance-id": "unknown", '
+                r'"event-type": "slurm_exception", "message": "Slurm Exception",'
                 r' "detail": {"exception": "Exception.*"}}',
             ],
         ),

@@ -31,11 +31,10 @@ class EC2Instance:
 
     def description(self):
         return {
-            "instance_id": self.id,
-            "private_ip": self.private_ip,
+            "instance-id": self.id,
+            "private-ip": self.private_ip,
             "hostname": self.hostname,
-            "launch_time": str(self.launch_time),
-            "slurm_node": self.slurm_node,
+            "launch-time": str(self.launch_time),
         }
 
     def __eq__(self, other):

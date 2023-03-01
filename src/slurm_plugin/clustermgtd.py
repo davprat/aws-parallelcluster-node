@@ -532,7 +532,7 @@ class ClusterManager:
                 self._update_slurm_nodes_with_ec2_info(nodes, cluster_instances)
                 log.debug("Nodes: %s", nodes)
                 self._publish_metric(
-                    "INFO",
+                    "DEBUG",
                     "Node Info",
                     "node_info",
                     event_supplier=({"detail": {"node": node.description()}} for node in nodes),
@@ -560,7 +560,7 @@ class ClusterManager:
 
     @staticmethod
     def _count_cluster_states(nodes: list[SlurmNode]):
-        count_map = Counter(("+".join([*node.states[:1], *sorted(node.states[1:])]) for node in nodes))
+        count_map = Counter((node.canonical_state_string for node in nodes))
         for state, count in count_map.items():
             yield {"detail": {"state": state, "count": count}}
 
@@ -1265,7 +1265,7 @@ class ClusterManager:
             event_supplier=(
                 {
                     "detail": {
-                        "node": node.description,
+                        "node": node.description(),
                     }
                 }
                 for node in active_nodes
