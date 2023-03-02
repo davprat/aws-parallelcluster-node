@@ -973,7 +973,7 @@ def test_handle_powering_down_nodes(
                 r'{"datetime": ".*", "timestamp": \d+(.\d*)?, "version": 0, "cluster-name": "hit-test", '
                 r'"node-role": "HeadNode", '
                 r'"component": "clustermgtd", "level": "WARNING", "instance-id": "i-instance-id", '
-                r'"event-type": "unhealthy_static_node_count", "message": "Unhealthy static node count", '
+                r'"event-type": "unhealthy-static-node-count", "message": "Unhealthy static node count", '
                 r'"detail": {"count": 3}}',
             ],
         ),
@@ -1004,7 +1004,7 @@ def test_handle_powering_down_nodes(
             [
                 r'{"datetime": ".*", "timestamp": \d+(\.\d*)?, "version": 0, "cluster-name": "hit-test", '
                 r'"node-role": "HeadNode", "component": "clustermgtd", "level": "WARNING", '
-                r'"instance-id": "i-instance-id", "event-type": "unhealthy_static_node_count", '
+                r'"instance-id": "i-instance-id", "event-type": "unhealthy-static-node-count", '
                 r'"message": "Unhealthy static node count", "detail": {"count": 3}}',
             ],
         ),
@@ -1030,15 +1030,15 @@ def test_handle_powering_down_nodes(
                 r'{"datetime": ".*", "timestamp": \d+(\.\d*)?, "version": 0, "cluster-name": "hit-test", '
                 r'"node-role": "HeadNode", '
                 r'"component": "clustermgtd", "level": "WARNING", "instance-id": "i-instance-id", '
-                r'"event-type": "unhealthy_static_node_count", "message": "Unhealthy static node count", '
+                r'"event-type": "unhealthy-static-node-count", "message": "Unhealthy static node count", '
                 r'"detail": {"count": 3}}',
                 r"Failed to launch instances due to limited EC2 capacity for following nodes: .*",
                 r'{"datetime": ".*", "timestamp": \d+(\.\d*)?, "version": 0, "cluster-name": "hit-test", '
                 r'"node-role": "HeadNode", '
                 r'"component": "clustermgtd", "level": "WARNING", "instance-id": "i-instance-id", '
-                r'"event-type": "static_node_replacement_failure_count", '
+                r'"event-type": "static-node-replacement-failure-count", '
                 r'"message": "After node maintenance, node failed replacement count", '
-                r'"detail": {"error_code": "LimitedInstanceCapacity", "count": 1}}',
+                r'"detail": {"error-code": "LimitedInstanceCapacity", "count": 1}}',
             ],
         ),
         (
@@ -2066,7 +2066,7 @@ def test_manage_cluster(
                 r'{"datetime": ".*", "timestamp": \d+(\.\d+)?, "version": 0, "cluster-name": "hit", '
                 r'"node-role": "HeadNode", '
                 r'"component": "clustermgtd", "level": "ERROR", "instance-id": "unknown", '
-                r'"event-type": "slurm_exception", "message": "Slurm Exception",'
+                r'"event-type": "slurm-exception", "message": "Slurm Exception",'
                 r' "detail": {"exception": "Exception.*"}}',
             ],
         ),

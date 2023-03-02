@@ -8,8 +8,7 @@
 # or in the "LICENSE.txt" file accompanying this file. This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES
 # OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions and
 # limitations under the License.
-
-
+import collections
 import functools
 import json
 import logging
@@ -140,7 +139,7 @@ def is_clustermgtd_heartbeat_valid(current_time, clustermgtd_timeout, clustermgt
         return False
 
 
-metric_levels = {
+metric_level_mapping = {
     "CRITICAL": logging.CRITICAL,
     "FATAL": logging.CRITICAL,
     "ERROR": logging.ERROR,
@@ -151,38 +150,50 @@ metric_levels = {
     "NOTSET": logging.NOTSET,
 }
 
+event_level_mapping = {
+    logging.CRITICAL: "CRITICAL",
+    logging.ERROR: "ERROR",
+    logging.WARNING: "WARNING",
+    logging.INFO: "INFO",
+    logging.DEBUG: "DEBUG",
+    logging.NOTSET: "NOTSET",
+}
 
-def metric_publisher(metric_logger, cluster_name, node_role, component, instance_id, **global_args):
-    def emit_metric(level, message, event_type, event_supplier=None, **kwargs):
-        log_level = metric_levels.get(level, logging.NOTSET)
+
+def event_publisher(metric_logger, cluster_name, node_role, component, instance_id, **global_args):
+    def emit_event(metric_level, message, event_type, event_supplier=None, **kwargs):
+        log_level = metric_level_mapping.get(metric_level, logging.NOTSET)
         if metric_logger.isEnabledFor(log_level):
+            event_level = event_level_mapping.get(log_level, "NOTSET")
             now = datetime.now(timezone.utc)
             if not event_supplier:
                 event_supplier = [kwargs]
             for details in event_supplier:
                 try:
-                    metric = {
-                        "datetime": now.isoformat(timespec="milliseconds"),
-                        "timestamp": now.timestamp(),
-                        "version": 0,
-                        "cluster-name": cluster_name,
-                        "node-role": node_role,
-                        "component": component,
-                        "level": level,
-                        "instance-id": instance_id,
-                        "event-type": event_type,
-                        "message": message,
-                    }
-                    metric.update(global_args)
-                    if kwargs:
-                        metric.update(kwargs)
-                    metric.update(details)
+                    metric = collections.ChainMap(
+                        details,
+                        kwargs,
+                        {
+                            "datetime": now.isoformat(timespec="milliseconds"),
+                            "timestamp": now.timestamp(),
+                            "version": 0,
+                            "cluster-name": cluster_name,
+                            "node-role": node_role,
+                            "component": component,
+                            "level": event_level,
+                            "instance-id": instance_id,
+                            "event-type": event_type,
+                            "message": message,
+                            "detail": {},
+                        },
+                        global_args,
+                    )
 
-                    metric_logger.log(log_level, "%s", json.dumps(metric))
+                    metric_logger.log(log_level, "%s", json.dumps(dict(metric)))
                 except Exception:
                     logger.error("Failed to publish metric: %s", traceback.format_exception(*sys.exc_info()))
 
-    return emit_metric
+    return emit_event
 
 
 def metric_publisher_noop(*args, **kwargs):

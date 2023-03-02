@@ -86,7 +86,7 @@ class FleetManagerFactory:
         all_or_nothing,
         run_instances_overrides,
         create_fleet_overrides,
-        publish_metric: Callable = lambda *args, **kwargs: None,
+        publish_event: Callable = lambda *args, **kwargs: None,
     ):
         try:
             queue_config = fleet_config[queue]
@@ -113,7 +113,7 @@ class FleetManagerFactory:
                 compute_resource_config,
                 all_or_nothing,
                 create_fleet_overrides.get(queue, {}).get(compute_resource, {}),
-                publish_metric=publish_metric,
+                publish_event=publish_event,
             )
         elif api == "run-instances":
             return Ec2RunInstancesManager(
@@ -125,7 +125,7 @@ class FleetManagerFactory:
                 compute_resource_config,
                 all_or_nothing,
                 run_instances_overrides.get(queue, {}).get(compute_resource, {}),
-                publish_metric=publish_metric,
+                publish_event=publish_event,
             )
         else:
             raise FleetManagerException(
@@ -147,7 +147,7 @@ class FleetManager(ABC):
         compute_resource_config,
         all_or_nothing,
         launch_overrides,
-        publish_metric: Callable,
+        publish_event: Callable,
     ):
         self._cluster_name = cluster_name
         self._region = region
@@ -157,7 +157,7 @@ class FleetManager(ABC):
         self._compute_resource_config = compute_resource_config
         self._all_or_nothing = all_or_nothing
         self._launch_overrides = launch_overrides
-        self._publish_metric = publish_metric
+        self._publish_event = publish_event
 
     @abstractmethod
     def _evaluate_launch_params(self, count):
@@ -193,7 +193,7 @@ class Ec2RunInstancesManager(FleetManager):
         compute_resource_config,
         all_or_nothing,
         launch_overrides,
-        publish_metric: Callable,
+        publish_event: Callable,
     ):
         super().__init__(
             cluster_name,
@@ -204,7 +204,7 @@ class Ec2RunInstancesManager(FleetManager):
             compute_resource_config,
             all_or_nothing,
             launch_overrides,
-            publish_metric=publish_metric,
+            publish_event=publish_event,
         )
 
     def _evaluate_launch_params(self, count):
@@ -231,12 +231,12 @@ class Ec2RunInstancesManager(FleetManager):
             return run_instances(self._region, self._boto3_config, launch_params)
         except ClientError as e:
             logger.error("Failed RunInstances request: %s", e.response.get("ResponseMetadata").get("RequestId"))
-            self._publish_metric(
+            self._publish_event(
                 "ERROR",
                 "Failed RunInstances request",
-                "launch_instance_client_exception",
+                "launch-instance-client-exception",
                 detail={
-                    "request_id": e.response.get("ResponseMetadata").get("RequestId"),
+                    "request-id": e.response.get("ResponseMetadata").get("RequestId"),
                     "exception": repr(e),
                 },
             )
@@ -256,7 +256,7 @@ class Ec2CreateFleetManager(FleetManager):
         compute_resource_config,
         all_or_nothing,
         launch_overrides,
-        publish_metric: Callable,
+        publish_event: Callable,
     ):
         super().__init__(
             cluster_name,
@@ -267,7 +267,7 @@ class Ec2CreateFleetManager(FleetManager):
             compute_resource_config,
             all_or_nothing,
             launch_overrides,
-            publish_metric=publish_metric,
+            publish_event=publish_event,
         )
 
     def _evaluate_template_overrides(self) -> list:
@@ -379,14 +379,14 @@ class Ec2CreateFleetManager(FleetManager):
                     err.get("ErrorCode"),
                     err.get("ErrorMessage"),
                 )
-                self._publish_metric(
+                self._publish_event(
                     "WARNING" if instances else "ERROR",
                     "Error in CreateFleet request",
-                    "create_fleet_error",
+                    "create-fleet-error",
                     detail={
-                        "request_id": response.get("ResponseMetadata", {}).get("RequestId"),
-                        "error_code": err.get("ErrorCode"),
-                        "error_message": err.get("ErrorMessage"),
+                        "request-id": response.get("ResponseMetadata", {}).get("RequestId"),
+                        "error-code": err.get("ErrorCode"),
+                        "error0message": err.get("ErrorMessage"),
                     },
                 )
 
@@ -394,10 +394,10 @@ class Ec2CreateFleetManager(FleetManager):
             instances, partial_instance_ids = self._get_instances_info(instance_ids)
             if partial_instance_ids:
                 logger.error("Unable to retrieve instance info for instances: %s", partial_instance_ids)
-                self._publish_metric(
+                self._publish_event(
                     "ERROR",
                     "Unable to retrieve instance info for instances",
-                    "create_fleet_instance_info_error",
+                    "create-fleet-instance-info-error",
                     detail={
                         "instance_ids": partial_instance_ids,
                     },

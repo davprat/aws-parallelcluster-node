@@ -890,7 +890,7 @@ def test_get_nodes_info(nodes, cmd_timeout, run_command_call, run_command_side_e
                 "   NextState=RESUME\n"
                 "   Partitions=queue1\n"
                 "   BootTime=2023-01-26T09:56:30 SlurmdStartTime=2023-01-26T09:57:16\n"
-                "   LastBusyTime=2023-01-26T09:57:15\n"
+                "   LastBusyTime=Unknown\n"
                 "   CfgTRES=cpu=2,mem=3891M,billing=2\n"
                 "   AllocTRES=\n"
                 "   CapWatts=n/a\n"

@@ -29,10 +29,10 @@ from common.utils import check_command_output, run_command, sleep_remaining_loop
 from retrying import retry
 from slurm_plugin.common import (
     DEFAULT_COMMAND_TIMEOUT,
+    event_publisher,
     expired_clustermgtd_heartbeat,
     get_clustermgtd_heartbeat,
     log_exception,
-    metric_publisher,
     metric_publisher_noop,
 )
 from slurm_plugin.slurm_resources import CONFIG_FILE_DIR
@@ -46,7 +46,7 @@ log = logging.getLogger(__name__)
 metrics_logger = log.getChild("metrics")
 
 
-_publish_metric: Callable = metric_publisher_noop
+_publish_event: Callable = metric_publisher_noop
 
 
 class ComputemgtdConfig:
@@ -140,10 +140,10 @@ def _self_terminate(self_node=None):
     """Self terminate the instance."""
     # Sleep for 10 seconds so termination log entries are uploaded to CW logs
     log.info("Preparing to self terminate the instance in 10 seconds!")
-    _publish_metric(
+    _publish_event(
         "INFO",
         "Self terminating instance",
-        "node_terminate",
+        "node-self-terminate",
         detail={
             "node": self_node.description() if self_node else None,
         },
@@ -170,13 +170,13 @@ def _is_self_node_down(self_nodename):
     try:
         self_node = _get_nodes_info_with_retry(self_nodename)[0]
         log.info("Current self node state %s", self_node.__repr__())
-        _publish_metric("INFO", "Current node state", "node_state", detail={"node": self_node.description()})
+        _publish_event("INFO", "Current node state", "node_state", detail={"node": self_node.description()})
         if self_node.is_down() or self_node.is_power():
             log.warning("Node is incorrectly attached to scheduler, preparing for self termination...")
-            _publish_metric(
+            _publish_event(
                 "WARNING",
                 "Node is incorrectly attached to scheduler",
-                "node_state_not_attached",
+                "node-state-not-attached",
                 detail={
                     "node": self_node.description(),
                 },
@@ -187,10 +187,10 @@ def _is_self_node_down(self_nodename):
     except Exception as e:
         # This could happen is slurmctld is down completely
         log.error("Unable to retrieve current node state from slurm with exception: %s\nConsidering node as down!", e)
-        _publish_metric(
+        _publish_event(
             "ERROR",
             "Unable to retrieve current node state from slurm",
-            "node_state_exception",
+            "node-state-exception",
             detail={
                 "exception": repr(e),
             },
@@ -215,16 +215,19 @@ def _load_daemon_config(config_file):
 
 
 def _configure_metrics(computemgtd_config):
-    global _publish_metric
-    _publish_metric = metric_publisher(
+    global _publish_event
+
+    _publish_event = event_publisher(
         metrics_logger,
         computemgtd_config.cluster_name,
         "ComputeNode",
         "computemgtd",
         computemgtd_config.instance_id,
-        node_id=computemgtd_config.nodename,
-        instance_type=computemgtd_config.instance_type,
-        availability_zone=computemgtd_config.availability_zone,
+        compute={
+            "name": computemgtd_config.nodename,
+            "instance-type": computemgtd_config.instance_type,
+            "availability-zone": computemgtd_config.availability_zone,
+        },
     )
 
 
@@ -237,10 +240,10 @@ def _run_computemgtd(config_file):
     reload_config_counter = RELOAD_CONFIG_ITERATIONS
     _configure_metrics(computemgtd_config=computemgtd_config)
     self_node = _get_nodes_info_with_retry(computemgtd_config.nodename)[0]
-    _publish_metric(
+    _publish_event(
         "INFO",
         "Initializing clustermgtd heartbeat",
-        "computemgtd_init",
+        "computemgtd-init",
         detail={
             "heartbeat": str(last_heartbeat),
             "node": self_node.description() if self_node else None,
@@ -258,10 +261,10 @@ def _run_computemgtd(config_file):
                 _configure_metrics(computemgtd_config=computemgtd_config)
             except Exception as e:
                 log.warning("Unable to reload daemon config, using previous one.\nException: %s", e)
-                _publish_metric(
+                _publish_event(
                     "WARNING",
                     "Unable to reload daemon config, using previous one.",
-                    "configuration_failure_exception",
+                    "configuration-failure-exception",
                     detail={
                         "exception": repr(e),
                         "node": self_node.description() if self_node else None,
@@ -274,12 +277,12 @@ def _run_computemgtd(config_file):
         try:
             last_heartbeat = get_clustermgtd_heartbeat(computemgtd_config.clustermgtd_heartbeat_file_path)
             log.info("Latest heartbeat from clustermgtd: %s", last_heartbeat)
-            _publish_metric(
+            _publish_event(
                 "INFO",
                 "Last heartbeat from clustermgtd",
                 "heartbeat",
                 detail={
-                    "last_heartbeat": last_heartbeat.isoformat() if last_heartbeat else None,
+                    "last-heartbeat": last_heartbeat.isoformat() if last_heartbeat else None,
                     "node": self_node.description() if self_node else None,
                 },
             )
@@ -289,12 +292,12 @@ def _run_computemgtd(config_file):
                 last_heartbeat,
                 e,
             )
-            _publish_metric(
+            _publish_event(
                 "WARNING",
                 "Unable to retrieve clustermgtd heartbeat. Using last known heartbeat",
-                "heartbeat_failure_exception",
+                "heartbeat-failure-exception",
                 detail={
-                    "last_heartbeat_exception": last_heartbeat.isoformat() if last_heartbeat else None,
+                    "last-heartbeat-exception": last_heartbeat.isoformat() if last_heartbeat else None,
                     "exception": repr(e),
                     "node": self_node.description() if self_node else None,
                 },

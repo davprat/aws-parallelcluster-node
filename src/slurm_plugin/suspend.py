@@ -18,13 +18,13 @@ from datetime import datetime, timezone
 from logging.config import fileConfig
 from typing import Callable
 
-from slurm_plugin.common import is_clustermgtd_heartbeat_valid, metric_publisher, metric_publisher_noop
+from slurm_plugin.common import event_publisher, is_clustermgtd_heartbeat_valid, metric_publisher_noop
 from slurm_plugin.slurm_resources import CONFIG_FILE_DIR
 
 log = logging.getLogger(__name__)
 metrics_logger = log.getChild("metrics")
 
-_publish_metric: Callable = metric_publisher_noop
+_publish_event: Callable = metric_publisher_noop
 
 
 class SlurmSuspendConfig:
@@ -79,9 +79,9 @@ def main():
             e,
         )
 
-    global _publish_metric
-    _publish_metric = metric_publisher(
-        metrics_logger, suspend_config.cluster_name, "HeadNode", "slurm_suspend", suspend_config.head_node_instance_id
+    global _publish_event
+    _publish_metric = event_publisher(
+        metrics_logger, suspend_config.cluster_name, "HeadNode", "slurm-suspend", suspend_config.head_node_instance_id
     )
 
     log.info("Suspending following nodes. Clustermgtd will cleanup orphaned instances: %s", args.nodes)
@@ -95,10 +95,10 @@ def main():
         "The backing EC2 instances may not be correctly terminated.\n"
         "Please check and terminate any orphaned instances in EC2!"
         log.error(error_message)
-        _publish_metric("ERROR", error_message, "suspend_error", detail={"nodes": args.nodes})
+        _publish_metric("ERROR", error_message, "suspend-error", detail={"nodes": args.nodes})
     else:
         log.info("SuspendProgram finished. Nodes will be available after SuspendTimeout")
-        _publish_metric("INFO", "Node Suspended", "suspend_node", detail={"nodes": args.nodes})
+        _publish_metric("INFO", "Node Suspended", "suspend-node", detail={"nodes": args.nodes})
 
 
 if __name__ == "__main__":

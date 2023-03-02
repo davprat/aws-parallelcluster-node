@@ -347,7 +347,7 @@ class SlurmNode(metaclass=ABCMeta):
             "compute-resource": self.compute_resource_name,
             "node-type": self._node_type,
             "instance": self.instance.description() if self.instance else "None",
-            "slurm-start-time": self.slurmd_started_time,
+            "slurmd-start-time": self.slurmd_started_time,
             "up-time": self.up_time,
             "idle-time": self.idle_time,
             "is-running-job": self.is_running_job(),

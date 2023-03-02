@@ -22,14 +22,14 @@ from typing import Callable
 from botocore.config import Config
 from common.schedulers.slurm_commands import resume_powering_down_nodes, update_all_partitions
 from slurm_plugin.clustermgtd import ComputeFleetStatus, ComputeFleetStatusManager
-from slurm_plugin.common import log_exception, metric_publisher, metric_publisher_noop
+from slurm_plugin.common import event_publisher, log_exception, metric_publisher_noop
 from slurm_plugin.instance_manager import InstanceManager
 from slurm_plugin.slurm_resources import CONFIG_FILE_DIR, PartitionStatus
 
 log = logging.getLogger(__name__)
 metrics_logger = log.getChild("metrics")
 
-_publish_metric: Callable = metric_publisher_noop
+_publish_event: Callable = metric_publisher_noop
 
 
 class SlurmFleetManagerConfig:
@@ -104,7 +104,7 @@ def _stop_partitions(config):
     log.info("Setting slurm partitions to INACTIVE and terminating all compute nodes...")
     update_all_partitions(PartitionStatus.INACTIVE, reset_node_addrs_hostname=True)
     instance_manager = InstanceManager(
-        config.region, config.cluster_name, config.boto3_config, publish_metric=_publish_metric
+        config.region, config.cluster_name, config.boto3_config, publish_event=_publish_event
     )
     instance_manager.terminate_all_compute_nodes(config.terminate_max_batch_size)
 
@@ -116,10 +116,10 @@ def _get_computefleet_status(computefleet_status_data_path):
             computefleet_status = ComputeFleetStatus(
                 computefleet_status_json.get(ComputeFleetStatusManager.COMPUTE_FLEET_STATUS_ATTRIBUTE)
             )
-            _publish_metric(
+            _publish_event(
                 "INFO",
                 "Compute fleet status",
-                event_type="compute_fleet_status",
+                event_type="compute-fleet-status",
                 detail={
                     "computefleet_status": computefleet_status_json,
                 },
@@ -127,10 +127,10 @@ def _get_computefleet_status(computefleet_status_data_path):
         log.info("ComputeFleet status is: %s", computefleet_status)
     except Exception as e:
         log.error("Cannot read compute fleet status data file: %s.\nException: %s", computefleet_status_data_path, e)
-        _publish_metric(
+        _publish_event(
             "ERROR",
             f"Cannot read compute fleet status data file: {computefleet_status_data_path}",
-            event_type="compute_fleet_status_exception",
+            event_type="compute-fleet-status-exception",
             detail={
                 "exception": repr(e),
             },
@@ -164,12 +164,12 @@ def main():
                 default_log_file,
                 e,
             )
-        global _publish_metric
-        _publish_metric = metric_publisher(
+        global _publish_event
+        _publish_event = event_publisher(
             metrics_logger,
             fleet_status_manager_config.cluster_name,
             "HeadNode",
-            "fleet_status_manager",
+            "fleet-status-manager",
             fleet_status_manager_config.instance_id,
         )
         log.info("FleetManager config: %s", fleet_status_manager_config)
