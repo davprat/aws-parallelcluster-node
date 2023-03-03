@@ -14,7 +14,6 @@ import json
 import logging
 import os
 import time
-from collections import Counter
 from configparser import ConfigParser
 from datetime import datetime, timezone
 from enum import Enum
@@ -40,6 +39,7 @@ from common.schedulers.slurm_commands import (
 from common.time_utils import seconds
 from common.utils import check_command_output, read_json, sleep_remaining_loop_time, time_is_up, wait_remaining_time
 from retrying import retry
+from slurm_plugin.cluster_event_publisher import ClusterEventPublisher
 from slurm_plugin.common import TIMESTAMP_FORMAT, event_publisher, log_exception, print_with_count
 from slurm_plugin.console_logger import ConsoleLogger
 from slurm_plugin.instance_manager import InstanceManager
@@ -379,7 +379,7 @@ class ClusterManager:
         self._instance_manager = None
         self._task_executor = None
         self._console_logger = None
-        self._publish_event = None
+        self._event_publisher = None
         self.set_config(config)
 
     def set_config(self, config: ClustermgtdConfig):
@@ -398,11 +398,13 @@ class ClusterManager:
             self._task_executor = self._initialize_executor(config)
 
             self._config = config
-            self._publish_event = event_publisher(
-                metrics_logger, config.cluster_name, "HeadNode", "clustermgtd", config.head_node_instance_id
+            self._event_publisher = ClusterEventPublisher(
+                event_publisher(
+                    metrics_logger, config.cluster_name, "HeadNode", "clustermgtd", config.head_node_instance_id
+                )
             )
             self._compute_fleet_status_manager = ComputeFleetStatusManager()
-            self._instance_manager = self._initialize_instance_manager(config, self._publish_event)
+            self._instance_manager = self._initialize_instance_manager(config)
             self._console_logger = self._initialize_console_logger(config)
 
     def shutdown(self):
@@ -411,7 +413,7 @@ class ClusterManager:
             self._task_executor = None
 
     @staticmethod
-    def _initialize_instance_manager(config, publish_event):
+    def _initialize_instance_manager(config):
         """Initialize instance manager class that will be used to launch/terminate/describe instances."""
         return InstanceManager(
             config.region,
@@ -426,7 +428,6 @@ class ClusterManager:
             run_instances_overrides=config.run_instances_overrides,
             create_fleet_overrides=config.create_fleet_overrides,
             fleet_config=config.fleet_config,
-            publish_event=publish_event,
         )
 
     def _initialize_executor(self, config):
@@ -500,22 +501,16 @@ class ClusterManager:
                     log.info("Retrieving nodes info from the scheduler")
                     nodes = self._get_node_info_with_retry()
                     partitions_name_map, compute_resource_nodes_map = self._parse_scheduler_nodes_data(nodes)
-                    self._publish_event(
-                        "INFO",
-                        "Node State Counts",
-                        "node-state-count",
-                        event_supplier=self._count_cluster_states(nodes),
-                    )
                 except Exception as e:
                     log.error(
                         "Unable to get partition/node info from slurm, no other action can be performed. Sleeping... "
                         "Exception: %s",
                         e,
                     )
-                    self._publish_event(
+                    self._event_publisher.publish_event(
                         "ERROR",
-                        "Slurm Exception",
-                        "slurm-exception",
+                        "Unable to get partition/node info from slurm, no other action can be performed.",
+                        "slurm-info-exception",
                         detail={"exception": repr(e)},
                     )
                     return
@@ -523,25 +518,22 @@ class ClusterManager:
                 # Get all non-terminating instances in EC2
                 try:
                     cluster_instances = self._get_ec2_instances()
-                except ClusterManager.EC2InstancesInfoUnavailable:
+                except ClusterManager.EC2InstancesInfoUnavailable as e:
                     log.error("Unable to get instances info from EC2, no other action can be performed. Sleeping...")
+                    self._event_publisher.publish_event(
+                        "ERROR",
+                        "Unable to get instances info from EC2, no other action can be performed",
+                        "instance-exception",
+                        detail={"exception": repr(e)},
+                    )
                     return
+
                 log.debug("Current cluster instances in EC2: %s", cluster_instances)
                 partitions = list(partitions_name_map.values())
                 self._update_slurm_nodes_with_ec2_info(nodes, cluster_instances)
                 log.debug("Nodes: %s", nodes)
-                self._publish_event(
-                    "INFO",
-                    "Idle node times",
-                    "idle-node-time",
-                    event_supplier=self._get_max_idle_times(nodes),
-                )
-                self._publish_event(
-                    "DEBUG",
-                    "Node Info",
-                    "node-info",
-                    event_supplier=({"detail": {"node": node.description()}} for node in nodes),
-                )
+                self._event_publisher.publish_cluster_node_events(nodes)
+
                 # Handle inactive partition and terminate backing instances
                 self._clean_up_inactive_partition(partitions)
                 # Perform health check actions
@@ -562,41 +554,6 @@ class ClusterManager:
 
         # Write clustermgtd heartbeat to file
         self._write_timestamp_to_file()
-
-    @staticmethod
-    def _count_cluster_states(nodes: list[SlurmNode]):
-        count_map = Counter((node.canonical_state_string for node in nodes))
-        for state, count in count_map.items():
-            yield {"detail": {"state": state, "count": count}}
-
-    @staticmethod
-    def _get_max_idle_times(nodes: list[SlurmNode]):
-        dynamic_node = max(
-            (node for node in nodes if isinstance(node, DynamicNode)), default=None, key=lambda node: node.idle_time
-        )
-        static_node = max(
-            (node for node in nodes if isinstance(node, StaticNode)), default=None, key=lambda node: node.idle_time
-        )
-
-        def format_node(node):
-            return (
-                {
-                    "name": node.name,
-                    "partition": node.queue_name,
-                    "resource": node.compute_resource_name,
-                    "instance-id": node.instance.id if node.instance else None,
-                    "idle-time": node.idle_time,
-                }
-                if node and node.idle_time > 0
-                else {"idle-time": 0}
-            )
-
-        yield {
-            "detail": {
-                "dynamic": format_node(dynamic_node),
-                "static": format_node(static_node),
-            }
-        }
 
     def _write_timestamp_to_file(self):
         """Write timestamp into shared file so compute nodes can determine if head node is online."""
@@ -812,23 +769,7 @@ class ClusterManager:
         Setting node to down will let slurm requeue jobs allocated to node.
         Setting node to power_down will terminate backing instance and reset dynamic node for future use.
         """
-        unhealthy_dynamic_nodes = list(unhealthy_dynamic_nodes)
-        self._publish_event(
-            "WARNING" if unhealthy_dynamic_nodes else "INFO",
-            "Scheduler health check failed count",
-            "dynamic-node-health-check-failure-count",
-            detail={"count": len(unhealthy_dynamic_nodes)},
-        )
-
         instances_to_terminate = [node.instance.id for node in unhealthy_dynamic_nodes if node.instance]
-        self._publish_event(
-            "WARNING" if instances_to_terminate else "INFO",
-            "Terminating instances that are backing unhealthy dynamic nodes",
-            "dynamic-node-health-check-failure-instance-terminate-count",
-            detail={
-                "count": len(instances_to_terminate),
-            },
-        )
         if instances_to_terminate:
             log.info("Terminating instances that are backing unhealthy dynamic nodes")
             self._instance_manager.delete_instances(
@@ -838,76 +779,35 @@ class ClusterManager:
         log.info("Setting unhealthy dynamic nodes to down and power_down.")
         power_down_nodes = [node.name for node in unhealthy_dynamic_nodes]
         set_nodes_power_down(power_down_nodes, reason="Scheduler health check failed")
-        self._publish_event(
-            "WARNING" if power_down_nodes else "INFO",
-            "Setting unhealthy dynamic nodes to down and power_down count",
-            "dynamic-node-health-check-failure-power-down-count",
-            detail={"count": len(power_down_nodes)},
-        )
 
-        self._publish_event(
-            "INFO",
-            "Scheduler health check failed",
-            "dynamic-node-health-check-failure",
-            event_supplier=(
-                {
-                    "detail": {
-                        "node": node.description(),
-                    }
-                }
-                for node in unhealthy_dynamic_nodes
-            ),
-        )
+        self._event_publisher.publish_unhealthy_dynamic_node_action_events(instances_to_terminate, power_down_nodes)
+
+    def _find_powering_down_nodes(self, slurm_nodes):
+        return [node for node in slurm_nodes if node.is_powering_down_with_nodeaddr() and not node.is_being_replaced]
 
     @log_exception(log, "maintaining powering down nodes", raise_on_error=False)
-    def _handle_powering_down_nodes(self, slurm_nodes):
+    def _handle_powering_down_nodes(self, powering_down_nodes):
         """
         Handle nodes that are powering down and not already being replaced.
 
         Terminate instances backing the powering down node if any.
         Reset the nodeaddr for the powering down node. Node state is not changed.
         """
-        powering_down_nodes = [
-            node for node in slurm_nodes if node.is_powering_down_with_nodeaddr() and not node.is_being_replaced
-        ]
-        self._publish_event(
+        log.info("Resetting powering down nodes: %s", print_with_count(powering_down_nodes))
+        reset_nodes(nodes=[node.name for node in powering_down_nodes])
+        instances_to_terminate = [node.instance.id for node in powering_down_nodes if node.instance]
+        log.info("Terminating instances that are backing powering down nodes")
+        self._instance_manager.delete_instances(
+            instances_to_terminate, terminate_batch_size=self._config.terminate_max_batch_size
+        )
+        self._event_publisher.publish_event(
             "INFO",
-            "Powering down node count",
-            "node-powering-down-count",
+            "Terminating instances that are backing powering down nodes",
+            "node-powering-down-instance-count",
             detail={
-                "count": len(powering_down_nodes),
+                "count": len(instances_to_terminate),
             },
         )
-
-        if powering_down_nodes:
-            log.info("Resetting powering down nodes: %s", print_with_count(powering_down_nodes))
-            reset_nodes(nodes=[node.name for node in powering_down_nodes])
-            instances_to_terminate = [node.instance.id for node in powering_down_nodes if node.instance]
-            log.info("Terminating instances that are backing powering down nodes")
-            self._instance_manager.delete_instances(
-                instances_to_terminate, terminate_batch_size=self._config.terminate_max_batch_size
-            )
-            self._publish_event(
-                "INFO",
-                "Terminating instances that are backing powering down nodes",
-                "node-powering-down-instance-count",
-                detail={
-                    "count": len(instances_to_terminate),
-                },
-            )
-            self._publish_event(
-                "INFO",
-                "Powering down node",
-                "node-powering-down",
-                event_supplier=(
-                    {
-                        "detail": {
-                            "node": node.description(),
-                        }
-                    }
-                    for node in powering_down_nodes
-                ),
-            )
 
     @log_exception(log, "maintaining unhealthy static nodes", raise_on_error=False)
     def _handle_unhealthy_static_nodes(self, unhealthy_static_nodes):
@@ -934,22 +834,6 @@ class ClusterManager:
         except Exception as e:
             log.error("Encountered exception when retrieving console output from unhealthy static nodes: %s", e)
 
-        self._publish_event(
-            "WARNING" if unhealthy_static_nodes else "INFO",
-            "Unhealthy static node count",
-            "unhealthy-static-node-count",
-            detail={
-                "count": len(unhealthy_static_nodes),
-            },
-        )
-
-        self._publish_event(
-            "INFO",
-            "Unhealthy static node",
-            "unhealthy-static-node",
-            event_supplier=({"detail": {"node": node.description()}} for node in unhealthy_static_nodes),
-        )
-
         node_list = [node.name for node in unhealthy_static_nodes]
         # Set nodes into down state so jobs can be requeued immediately
         try:
@@ -966,7 +850,7 @@ class ClusterManager:
                 instances_to_terminate, terminate_batch_size=self._config.terminate_max_batch_size
             )
         log.info("Launching new instances for unhealthy static nodes")
-        successful_nodes = self._instance_manager.add_instances_for_nodes(
+        self._instance_manager.add_instances_for_nodes(
             node_list, self._config.launch_max_batch_size, self._config.update_node_address
         )
         # Add launched nodes to list of nodes being replaced, excluding any nodes that failed to launch
@@ -977,55 +861,9 @@ class ClusterManager:
             "After node maintenance, following nodes are currently in replacement: %s",
             print_with_count(self._static_nodes_in_replacement),
         )
-        self._publish_unhealthy_static_node_metrics(successful_nodes, self._instance_manager.failed_nodes.items())
-
-    def _publish_unhealthy_static_node_metrics(self, successful_nodes, failed_nodes):
-        self._publish_event(
-            "INFO",
-            "After node maintenance, nodes currently in replacement",
-            event_type="static-node-replacement-count",
-            detail={
-                "count": len(successful_nodes),
-            },
+        self._event_publisher.publish_static_nodes_in_replacement(
+            unhealthy_static_nodes, self._static_nodes_in_replacement, self._instance_manager.failed_nodes
         )
-        self._publish_event(
-            "INFO",
-            "After node maintenance, node currently in replacement",
-            event_type="static-node-replacement",
-            event_supplier=(
-                {
-                    "detail": {
-                        "node": node.description(),
-                        "instance": instance.description() if instance else None,
-                    }
-                }
-                for node, instance in successful_nodes
-            ),
-        )
-        for error_code, failed_node_list in failed_nodes:
-            self._publish_event(
-                "WARNING",
-                "After node maintenance, node failed replacement count",
-                event_type="static-node-replacement-failure-count",
-                detail={
-                    "error-code": error_code,
-                    "count": len(failed_node_list),
-                },
-            )
-            self._publish_event(
-                "INFO",
-                "After node maintenance, node failed replacement",
-                event_type="static-node-replacement-failure",
-                event_supplier=(
-                    {
-                        "detail": {
-                            "node": node.description(),
-                            "error-code": error_code,
-                        }
-                    }
-                    for node in failed_node_list
-                ),
-            )
 
     @log_exception(log, "maintaining slurm nodes", catch_exception=Exception, raise_on_error=False)
     def _maintain_nodes(self, partitions_name_map, compute_resource_nodes_map):
@@ -1042,22 +880,36 @@ class ClusterManager:
         log.info(
             "Following nodes are currently in replacement: %s", print_with_count(self._static_nodes_in_replacement)
         )
-        self._handle_powering_down_nodes(active_nodes)
+
+        powering_down_nodes = self._find_powering_down_nodes(active_nodes)
+        self._event_publisher.publish_powering_down_node_events(powering_down_nodes)
+        if powering_down_nodes:
+            self._handle_powering_down_nodes(powering_down_nodes)
+
         (
             unhealthy_dynamic_nodes,
             unhealthy_static_nodes,
             ice_compute_resources_and_nodes_map,
         ) = self._find_unhealthy_slurm_nodes(active_nodes)
+
+        unhealthy_dynamic_nodes = list(unhealthy_dynamic_nodes)
+        self._event_publisher.publish_unhealthy_dynamic_node_events(unhealthy_dynamic_nodes)
         if unhealthy_dynamic_nodes:
             log.info("Found the following unhealthy dynamic nodes: %s", print_with_count(unhealthy_dynamic_nodes))
             self._handle_unhealthy_dynamic_nodes(unhealthy_dynamic_nodes)
+
+        self._event_publisher.publish_unhealthy_static_node_events(unhealthy_static_nodes)
         if unhealthy_static_nodes:
             log.info("Found the following unhealthy static nodes: %s", print_with_count(unhealthy_static_nodes))
             self._handle_unhealthy_static_nodes(unhealthy_static_nodes)
+
         if self._is_protected_mode_enabled():
             self._handle_protected_mode_process(active_nodes, partitions_name_map)
+
+        self._event_publisher.publish_insufficient_capacity_events(ice_compute_resources_and_nodes_map)
         if self._config.disable_nodes_on_insufficient_capacity:
             self._handle_ice_nodes(ice_compute_resources_and_nodes_map, compute_resource_nodes_map)
+
         self._handle_failed_health_check_nodes_in_replacement(active_nodes)
 
     @log_exception(log, "terminating orphaned instances", catch_exception=Exception, raise_on_error=False)
@@ -1070,44 +922,19 @@ class ClusterManager:
                 instance.launch_time, self._current_time, self._config.orphaned_instance_timeout
             ):
                 instances_to_terminate.append(instance.id)
-        self._publish_event(
-            "WARNING" if instances_to_terminate else "INFO",
-            "Orphaned instance count",
-            "orphaned-instance-count",
-            detail={
-                "count": len(instances_to_terminate),
-            },
-        )
+
         if instances_to_terminate:
             log.info("Terminating orphaned instances")
             self._instance_manager.delete_instances(
                 instances_to_terminate, terminate_batch_size=self._config.terminate_max_batch_size
             )
-        self._publish_event(
-            "INFO",
-            "Found orphaned instance",
-            "terminating-orphaned-instance",
-            event_supplier=(
-                {
-                    "detail": {
-                        "instance": instance.description(),
-                    }
-                }
-                for instance in cluster_instances
-                if instance.id in instances_to_terminate
-            ),
-        )
+        self._event_publisher.publish_orphaned_instance_events(cluster_instances, instances_to_terminate)
 
     def _enter_protected_mode(self, partitions_to_disable):
         """Entering protected mode if no active running job in queue."""
         # Place partitions into inactive
         log.info("Placing bootstrap failure partitions to INACTIVE: %s", partitions_to_disable)
         update_partitions(partitions_to_disable, PartitionStatus.INACTIVE)
-
-        def flatten_partition_failure_counts():
-            for partition, resources in self._partitions_protected_failure_count_map:
-                for resource, count in resources:
-                    yield {"detail": {"partition": partition, "resource": resource, "count": count}}
 
         # Change compute fleet status to protected
         if not ComputeFleetStatus.is_protected(self._compute_fleet_status):
@@ -1117,24 +944,7 @@ class ClusterManager:
                 "command to re-enable the fleet."
             )
             self._update_compute_fleet_status(ComputeFleetStatus.PROTECTED)
-            self._publish_event(
-                "WARNING",
-                (
-                    "Setting cluster into protected mode due to failures detected in node provisioning. "
-                    "Please investigate the issue and then use "
-                    "'pcluster update-compute-fleet --status START_REQUESTED' command to re-enable the fleet."
-                ),
-                "cluster-entering-protected-mode",
-                detail={
-                    "partition_failures": self._partitions_protected_failure_count_map,
-                },
-            )
-            self._publish_event(
-                "INFO",
-                "Partition compute resource failure count",
-                "partition-compute-resource-failure-count",
-                event_supplier=flatten_partition_failure_counts(),
-            )
+            self._event_publisher.publish_entering_protected_mode_events(self._partitions_protected_failure_count_map)
 
     def _reset_partition_failure_count(self, partition):
         """Reset bootstrap failure count for partition which has bootstrap failure nodes successfully launched."""
@@ -1238,36 +1048,10 @@ class ClusterManager:
                     "Ignoring health check failure due to reboot for nodes: %s",
                     nodes_name_recently_rebooted,
                 )
-
-            self._publish_event(
-                "INFO",
-                f"Node failing {health_check_type}, setting to DRAIN",
-                "node-failed-health-check",
-                event_supplier=(
-                    {
-                        "detail": {
-                            "health-check-type": health_check_type,
-                            "node": node.description(),
-                        },
-                    }
-                    for node in nodes_failing_health_check
-                    if node.name in nodes_name_failing_health_check
-                ),
-            )
-
-        self._publish_event(
-            "WARNING" if nodes_name_failing_health_check else "INFO",
-            f"Nodes failing {health_check_type} count",
-            "node-failed-health-check-count",
-            detail={"count": len(nodes_name_failing_health_check)},
-        )
-        self._publish_event(
-            "INFO",
-            f"Rebooted nodes ignoring {health_check_type} count",
-            "rebooted-nodes-count",
-            event_supplier=[{"detail": {"count": len(nodes_name_recently_rebooted)}}]
-            if nodes_name_recently_rebooted
-            else [],
+        self._event_publisher.publish_nodes_failing_health_check_events(
+            health_check_type,
+            [node for node in nodes_failing_health_check if node.name in nodes_name_failing_health_check],
+            [node for node in nodes_failing_health_check if node.name in nodes_name_recently_rebooted],
         )
 
     def _handle_failed_health_check_nodes_in_replacement(self, active_nodes):
@@ -1284,27 +1068,8 @@ class ClusterManager:
                 failed_health_check_nodes_in_replacement,
             )
             self._static_nodes_in_replacement -= set(failed_health_check_nodes_in_replacement)
-
-        self._publish_event(
-            "WARNING" if failed_health_check_nodes_in_replacement else "INFO",
-            "Static node in replacement failed health check count",
-            "static-node-replacement-health-check-failure-count",
-            detail={"count": len(failed_health_check_nodes_in_replacement)},
-        )
-
-        self._publish_event(
-            "INFO",
-            "Static node in replacement failed health check",
-            "static-node-replacement-health-check-failure",
-            event_supplier=(
-                {
-                    "detail": {
-                        "node": node.description(),
-                    }
-                }
-                for node in active_nodes
-                if node.name in failed_health_check_nodes_in_replacement
-            ),
+        self._event_publisher.publish_failed_health_check_nodes_in_replacement(
+            [node for node in active_nodes if node.name in failed_health_check_nodes_in_replacement]
         )
 
     @log_exception(log, "handling health check", catch_exception=Exception, raise_on_error=False)
@@ -1425,29 +1190,10 @@ class ClusterManager:
         compute_resource_nodes_map: Dict[str, Dict[str, List[SlurmNode]]],
     ):
         """Handle nodes failed with insufficient capacity."""
-
-        def flatten_insufficient_capacity_compute_resources():
-            for partition_name, resources in self._insufficient_capacity_compute_resources.items():
-                for resource_name, event in resources:
-                    yield {
-                        "detail": {
-                            "partition": partition_name,
-                            "resource": resource_name,
-                            "error-code": event.error_code,
-                        }
-                    }
-
         if ice_compute_resources_and_nodes_map:
             self._update_insufficient_capacity_compute_resources(ice_compute_resources_and_nodes_map)
             self._reset_timeout_expired_compute_resources(ice_compute_resources_and_nodes_map)
         self._set_ice_compute_resources_to_down(compute_resource_nodes_map)
-
-        self._publish_event(
-            "WARNING",
-            "Insufficient capacity errors",
-            "insufficient-capacity-errors",
-            event_supplier=flatten_insufficient_capacity_compute_resources(),
-        )
 
     def _update_insufficient_capacity_compute_resources(
         self, ice_compute_resources_and_nodes_map: Dict[str, Dict[str, List[SlurmNode]]]
@@ -1455,37 +1201,10 @@ class ClusterManager:
         """Add compute resource to insufficient_capacity_compute_resources if node is ICE node."""
         for queue_name, compute_resources in ice_compute_resources_and_nodes_map.items():
             for compute_resource, nodes in compute_resources.items():
-                self._publish_event(
-                    "INFO",
-                    "Insufficient capacity node count",
-                    "insufficient-capacity-node-count",
-                    detail={
-                        "partition": queue_name,
-                        "resource": compute_resource,
-                        "error-code": nodes[0].error_code,
-                        "count": len(nodes),
-                    },
-                )
                 if not self._insufficient_capacity_compute_resources.get(queue_name, {}).get(compute_resource):
                     self._insufficient_capacity_compute_resources.setdefault(queue_name, {})[
                         compute_resource
                     ] = ComputeResourceFailureEvent(self._current_time, nodes[0].error_code)
-                    self._publish_event(
-                        "DEBUG",
-                        "Node with insufficient capacity",
-                        "insufficient-capacity-node",
-                        event_supplier=(
-                            {
-                                "detail": {
-                                    "partition": queue_name,
-                                    "resource": compute_resource,
-                                    "error-code": node.error_code,
-                                    "node": node.description(),
-                                }
-                            }
-                            for node in nodes
-                        ),
-                    )
 
     def _reset_timeout_expired_compute_resources(
         self, ice_compute_resources_and_nodes_map: Dict[str, Dict[str, List[SlurmNode]]]
@@ -1526,20 +1245,6 @@ class ClusterManager:
                     [node.name for node in node_list],
                     reason=f"(Code:{error_code})Temporarily disabling node due to insufficient capacity",
                 )
-                self._publish_event(
-                    "DEBUG",
-                    "Temporarily disabling node due to insufficient capacity",
-                    "disabling-insufficient-capacity-node",
-                    event_supplier=(
-                        {
-                            "detail": {
-                                "error-code": error_code,
-                                "node": node.description(),
-                            }
-                        }
-                        for node in node_list
-                    ),
-                )
 
     def _find_insufficient_capacity_timeout_expired_compute_resources(
         self,
@@ -1558,7 +1263,7 @@ class ClusterManager:
     def _reset_insufficient_capacity_timeout_expired_nodes(
         self,
         timeout_expired_cr: Dict[str, Dict[str, ComputeResourceFailureEvent]],
-        ice_compute_resources_and_nodes_map: Dict[str, Dict[str, ComputeResourceFailureEvent]],
+        ice_compute_resources_and_nodes_map: Dict[str, Dict[str, List[SlurmNode]]],
     ):
         """Reset nodes in the compute resource which insufficient_capacity_timeout expired."""
         logging.info(

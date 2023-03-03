@@ -921,7 +921,8 @@ def test_handle_powering_down_nodes(
     cluster_manager = ClusterManager(mock_sync_config)
     mock_instance_manager = cluster_manager._instance_manager
     reset_nodes_mock = mocker.patch("slurm_plugin.clustermgtd.reset_nodes", autospec=True)
-    cluster_manager._handle_powering_down_nodes(slurm_nodes)
+    powering_down_nodes = cluster_manager._find_powering_down_nodes(slurm_nodes)
+    cluster_manager._handle_powering_down_nodes(powering_down_nodes)
     mock_instance_manager.delete_instances.assert_called_with(instances_to_terminate, terminate_batch_size=4)
     reset_nodes_mock.assert_called_with(nodes=expected_powering_down_nodes)
 
@@ -969,13 +970,7 @@ def test_handle_powering_down_nodes(
             True,
             None,
             100,
-            [
-                r'{"datetime": ".*", "timestamp": \d+(.\d*)?, "version": 0, "cluster-name": "hit-test", '
-                r'"node-role": "HeadNode", '
-                r'"component": "clustermgtd", "level": "WARNING", "instance-id": "i-instance-id", '
-                r'"event-type": "unhealthy-static-node-count", "message": "Unhealthy static node count", '
-                r'"detail": {"count": 3}}',
-            ],
+            [],
         ),
         (
             {"current-queue1-st-c5xlarge-6"},
@@ -1001,12 +996,7 @@ def test_handle_powering_down_nodes(
             False,
             None,
             1,
-            [
-                r'{"datetime": ".*", "timestamp": \d+(\.\d*)?, "version": 0, "cluster-name": "hit-test", '
-                r'"node-role": "HeadNode", "component": "clustermgtd", "level": "WARNING", '
-                r'"instance-id": "i-instance-id", "event-type": "unhealthy-static-node-count", '
-                r'"message": "Unhealthy static node count", "detail": {"count": 3}}',
-            ],
+            [],
         ),
         (
             {"current-queue1-st-c5xlarge-6"},
@@ -1027,18 +1017,13 @@ def test_handle_powering_down_nodes(
             None,
             1,
             [
-                r'{"datetime": ".*", "timestamp": \d+(\.\d*)?, "version": 0, "cluster-name": "hit-test", '
-                r'"node-role": "HeadNode", '
-                r'"component": "clustermgtd", "level": "WARNING", "instance-id": "i-instance-id", '
-                r'"event-type": "unhealthy-static-node-count", "message": "Unhealthy static node count", '
-                r'"detail": {"count": 3}}',
                 r"Failed to launch instances due to limited EC2 capacity for following nodes: .*",
-                r'{"datetime": ".*", "timestamp": \d+(\.\d*)?, "version": 0, "cluster-name": "hit-test", '
-                r'"node-role": "HeadNode", '
-                r'"component": "clustermgtd", "level": "WARNING", "instance-id": "i-instance-id", '
-                r'"event-type": "static-node-replacement-failure-count", '
-                r'"message": "After node maintenance, node failed replacement count", '
-                r'"detail": {"error-code": "LimitedInstanceCapacity", "count": 1}}',
+                r'{"datetime": ".*", "timestamp": .*, "version": 0, "cluster-name": "hit-test", '
+                r'"node-role": "HeadNode", "component": "clustermgtd", "level": "WARNING", '
+                r'"instance-id": "i-instance-id", "event-type": "static-nodes-in-replacement-failure-count", '
+                r'"message": ".*", '
+                r'"detail": {"error-code": "LimitedInstanceCapacity", "count": 1, '
+                r'"nodes": \[{"name": "queue1-st-c5xlarge-3"}\]}}',
             ],
         ),
         (
@@ -1333,7 +1318,8 @@ def test_maintain_nodes(
     mock_update_replacement.assert_called_with(active_nodes)
     mock_handle_dynamic.assert_called_with(expected_unhealthy_dynamic_nodes)
     mock_handle_static.assert_called_with(expected_unhealthy_static_nodes)
-    mock_handle_powering_down_nodes.assert_called_with(active_nodes)
+    powering_down_nodes = cluster_manager._find_powering_down_nodes(active_nodes)
+    mock_handle_powering_down_nodes.assert_called_with(powering_down_nodes)
     mock_handle_failed_health_check_nodes_in_replacement.assert_called_with(active_nodes)
     if _is_protected_mode_enabled:
         mock_handle_protected_mode_process.assert_called_with(active_nodes, partitions)
@@ -2052,6 +2038,11 @@ def test_manage_cluster(
                 r"Failed when getting cluster instances from EC2 with exception",
                 r"Failed when getting instance info from EC2 with exception",
                 r"Unable to get instances info from EC2, no other action can be performed.",
+                r'{"datetime": ".*", "timestamp": .*, "version": 0, "cluster-name": "hit", "node-role": "HeadNode", '
+                r'"component": "clustermgtd", "level": "ERROR", "instance-id": "unknown", '
+                r'"event-type": "instance-exception", '
+                r'"message": "Unable to get instances info from EC2, no other action can be performed", '
+                r'"detail": {"exception": "EC2InstancesInfoUnavailable.*"}}',
             ],
         ),
         (
@@ -2063,10 +2054,10 @@ def test_manage_cluster(
             [{}],
             [
                 "Unable to get partition/node info from slurm, no other action can be performed",
-                r'{"datetime": ".*", "timestamp": \d+(\.\d+)?, "version": 0, "cluster-name": "hit", '
+                r'{"datetime": ".*", "timestamp": .*, "version": 0, "cluster-name": "hit", '
                 r'"node-role": "HeadNode", '
                 r'"component": "clustermgtd", "level": "ERROR", "instance-id": "unknown", '
-                r'"event-type": "slurm-exception", "message": "Slurm Exception",'
+                r'"event-type": "slurm-info-exception", "message": ".*",'
                 r' "detail": {"exception": "Exception.*"}}',
             ],
         ),

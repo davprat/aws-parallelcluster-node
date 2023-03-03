@@ -16,11 +16,11 @@ import os
 from configparser import ConfigParser
 from datetime import datetime, timezone
 from logging.config import fileConfig
-from typing import Callable
 
 from botocore.config import Config
 from common.schedulers.slurm_commands import get_nodes_info, set_nodes_down
 from common.utils import read_json
+from slurm_plugin.cluster_event_publisher import ClusterEventPublisher
 from slurm_plugin.common import event_publisher, is_clustermgtd_heartbeat_valid, metric_publisher_noop, print_with_count
 from slurm_plugin.instance_manager import InstanceManager
 from slurm_plugin.slurm_resources import CONFIG_FILE_DIR
@@ -28,7 +28,7 @@ from slurm_plugin.slurm_resources import CONFIG_FILE_DIR
 log = logging.getLogger(__name__)
 metrics_logger = log.getChild("metrics")
 
-_publish_event: Callable = metric_publisher_noop
+_event_publisher: ClusterEventPublisher = ClusterEventPublisher(metric_publisher_noop)
 
 
 class SlurmResumeConfig:
@@ -145,21 +145,6 @@ def _handle_failed_nodes(node_list, reason="Failure when resuming nodes", error_
     """
     try:
         log.info("Setting following failed nodes into DOWN state: %s", print_with_count(node_list))
-        _publish_event(
-            "WARNING",
-            "Setting failed node to DOWN state",
-            event_type="node-launch-failure",
-            event_supplier=(
-                {
-                    "detail": {
-                        "reason": reason,
-                        "error-code": error_code,
-                        "node": {"name": node},
-                    }
-                }
-                for node in node_list
-            ),
-        )
         set_nodes_down(node_list, reason=reason)
     except Exception as e:
         log.error("Failed to place nodes %s into down with exception: %s", print_with_count(node_list), e)
@@ -177,6 +162,14 @@ def _resume(arg_nodes, resume_config):
             "Please check clustermgtd log for error.\n"
             "Not launching nodes %s",
             arg_nodes,
+        )
+        _event_publisher.publish_event(
+            "ERROR",
+            "No valid clustermgtd heartbeat detected",
+            event_type="slurm-resume-heartbeat-failure",
+            details={
+                "nodes": arg_nodes,
+            },
         )
         _handle_failed_nodes(arg_nodes)
         return
@@ -197,7 +190,6 @@ def _resume(arg_nodes, resume_config):
         fleet_config=resume_config.fleet_config,
         run_instances_overrides=resume_config.run_instances_overrides,
         create_fleet_overrides=resume_config.create_fleet_overrides,
-        publish_event=_publish_event,
     )
     successful_nodes = instance_manager.add_instances_for_nodes(
         node_list=node_list,
@@ -209,21 +201,6 @@ def _resume(arg_nodes, resume_config):
     success_nodes = [node for node in node_list if node not in failed_nodes]
     log.info("Successfully launched nodes %s", print_with_count(success_nodes))
 
-    _publish_event(
-        "INFO",
-        "Launched Node",
-        event_type="successful-node",
-        event_supplier=(
-            {
-                "detail": {
-                    "node": {"name": node},
-                    "instance": instance.description(),
-                }
-            }
-            for node, instance in successful_nodes
-        ),
-    )
-
     if failed_nodes:
         log.error(
             "Failed to launch following nodes, setting nodes to down: %s",
@@ -233,6 +210,7 @@ def _resume(arg_nodes, resume_config):
             _handle_failed_nodes(
                 node_list, reason=f"(Code:{error_code})Failure when resuming nodes", error_code=error_code
             )
+    _event_publisher.publish_node_launch_events(successful_nodes, instance_manager.failed_nodes)
 
 
 def main():
@@ -259,9 +237,15 @@ def main():
                 default_log_file,
                 e,
             )
-        global _publish_event
-        _publish_event = event_publisher(
-            metrics_logger, resume_config.cluster_name, "HeadNode", "slurm-resume", resume_config.head_node_instance_id
+        global _event_publisher
+        _event_publisher = ClusterEventPublisher(
+            event_publisher(
+                metrics_logger,
+                resume_config.cluster_name,
+                "HeadNode",
+                "slurm-resume",
+                resume_config.head_node_instance_id,
+            )
         )
 
         log.info("ResumeProgram config: %s", resume_config)
@@ -269,6 +253,15 @@ def main():
         log.info("ResumeProgram finished.")
     except Exception as e:
         log.exception("Encountered exception when requesting instances for %s: %s", args.nodes, e)
+        _event_publisher.publish_event(
+            "ERROR",
+            "Exception while running slurm_resume",
+            event_type="slurm-resume-exception",
+            details={
+                "exception": repr(e),
+                "nodes": args.nodes,
+            },
+        )
         _handle_failed_nodes(args.nodes)
 
 

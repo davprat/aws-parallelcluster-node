@@ -103,9 +103,7 @@ def _start_partitions():
 def _stop_partitions(config):
     log.info("Setting slurm partitions to INACTIVE and terminating all compute nodes...")
     update_all_partitions(PartitionStatus.INACTIVE, reset_node_addrs_hostname=True)
-    instance_manager = InstanceManager(
-        config.region, config.cluster_name, config.boto3_config, publish_event=_publish_event
-    )
+    instance_manager = InstanceManager(config.region, config.cluster_name, config.boto3_config)
     instance_manager.terminate_all_compute_nodes(config.terminate_max_batch_size)
 
 

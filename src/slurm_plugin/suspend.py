@@ -80,7 +80,7 @@ def main():
         )
 
     global _publish_event
-    _publish_metric = event_publisher(
+    _publish_event = event_publisher(
         metrics_logger, suspend_config.cluster_name, "HeadNode", "slurm-suspend", suspend_config.head_node_instance_id
     )
 
@@ -95,10 +95,10 @@ def main():
         "The backing EC2 instances may not be correctly terminated.\n"
         "Please check and terminate any orphaned instances in EC2!"
         log.error(error_message)
-        _publish_metric("ERROR", error_message, "suspend-error", detail={"nodes": args.nodes})
+        _publish_event("ERROR", error_message, "suspend-error", detail={"nodes": args.nodes})
     else:
         log.info("SuspendProgram finished. Nodes will be available after SuspendTimeout")
-        _publish_metric("INFO", "Node Suspended", "suspend-node", detail={"nodes": args.nodes})
+        _publish_event("INFO", "Node Suspended", "suspend-node", detail={"nodes": args.nodes})
 
 
 if __name__ == "__main__":
