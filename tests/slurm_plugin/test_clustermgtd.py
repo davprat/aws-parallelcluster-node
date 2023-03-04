@@ -1018,7 +1018,7 @@ def test_handle_powering_down_nodes(
             1,
             [
                 r"Failed to launch instances due to limited EC2 capacity for following nodes: .*",
-                r'{"datetime": ".*", "timestamp": .*, "version": 0, "cluster-name": "hit-test", '
+                r'{"datetime": ".*", "version": 0, "cluster-name": "hit-test", '
                 r'"node-role": "HeadNode", "component": "clustermgtd", "level": "WARNING", '
                 r'"instance-id": "i-instance-id", "event-type": "static-nodes-in-replacement-failure-count", '
                 r'"message": ".*", '
@@ -2038,7 +2038,7 @@ def test_manage_cluster(
                 r"Failed when getting cluster instances from EC2 with exception",
                 r"Failed when getting instance info from EC2 with exception",
                 r"Unable to get instances info from EC2, no other action can be performed.",
-                r'{"datetime": ".*", "timestamp": .*, "version": 0, "cluster-name": "hit", "node-role": "HeadNode", '
+                r'{"datetime": ".*", "version": 0, "cluster-name": "hit", "node-role": "HeadNode", '
                 r'"component": "clustermgtd", "level": "ERROR", "instance-id": "unknown", '
                 r'"event-type": "instance-exception", '
                 r'"message": "Unable to get instances info from EC2, no other action can be performed", '
@@ -2054,7 +2054,7 @@ def test_manage_cluster(
             [{}],
             [
                 "Unable to get partition/node info from slurm, no other action can be performed",
-                r'{"datetime": ".*", "timestamp": .*, "version": 0, "cluster-name": "hit", '
+                r'{"datetime": ".*", "version": 0, "cluster-name": "hit", '
                 r'"node-role": "HeadNode", '
                 r'"component": "clustermgtd", "level": "ERROR", "instance-id": "unknown", '
                 r'"event-type": "slurm-info-exception", "message": ".*",'

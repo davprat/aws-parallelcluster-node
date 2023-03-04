@@ -8,23 +8,27 @@
 # or in the "LICENSE.txt" file accompanying this file. This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES
 # OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions and
 # limitations under the License.
-
-
 import logging
 import os
 
 import pytest
 import slurm_plugin
 from assertpy import assert_that
-from slurm_plugin.computemgtd import ComputemgtdConfig, _is_self_node_down, _self_terminate
+from slurm_plugin.computemgtd import ComputemgtdConfig, _filter_node_description, _is_self_node_down, _self_terminate
 from slurm_plugin.slurm_resources import DynamicNode
 
 
 @pytest.mark.parametrize(
-    ("config_file", "expected_attributes"),
+    ("config_file", "node_description", "expected_attributes"),
     [
         (
             "default.conf",
+            {
+                "name": "carlton",
+                "instance-id": "i-insistence",
+                "instance-type": "c5.large",
+                "availability-zone": "ap-east-1",
+            },
             {
                 "cluster_name": "hit",
                 "region": "us-east-2",
@@ -34,6 +38,14 @@ from slurm_plugin.slurm_resources import DynamicNode
                 "disable_computemgtd_actions": False,
                 "_slurm_nodename_file": "/etc/parallelcluster/slurm_plugin/slurm_nodename",
                 "nodename": "some_nodename",
+                "_slurm_node_description_file": "/etc/parallelcluster/slurm_plugin/slurm_node_description.json",
+                "node_description": {
+                    "name": "carlton",
+                    "instance-id": "i-insistence",
+                    "instance-type": "c5.large",
+                    "availability-zone": "ap-east-1",
+                },
+                "instance_id": "i-insistence",
                 "loop_time": 60,
                 "logging_config": os.path.join(
                     os.path.dirname(slurm_plugin.__file__), "logging", "parallelcluster_computemgtd_logging.conf"
@@ -43,6 +55,12 @@ from slurm_plugin.slurm_resources import DynamicNode
         (
             "all_options.conf",
             {
+                "name": "carlton",
+                "instance-id": "i-insistence",
+                "instance-type": "c5.large",
+                "availability-zone": "ap-east-1",
+            },
+            {
                 "cluster_name": "hit",
                 "region": "us-east-2",
                 "loop_time": 300,
@@ -50,6 +68,14 @@ from slurm_plugin.slurm_resources import DynamicNode
                 "clustermgtd_heartbeat_file_path": "/home/ubuntu/clustermgtd_heartbeat",
                 "_slurm_nodename_file": "/my/nodename/path",
                 "nodename": "some_nodename",
+                "_slurm_node_description_file": "/my/node_description/path",
+                "node_description": {
+                    "name": "carlton",
+                    "instance-id": "i-insistence",
+                    "instance-type": "c5.large",
+                    "availability-zone": "ap-east-1",
+                },
+                "instance_id": "i-insistence",
                 "disable_computemgtd_actions": True,
                 "_boto3_config": {
                     "retries": {"max_attempts": 1, "mode": "standard"},
@@ -60,8 +86,11 @@ from slurm_plugin.slurm_resources import DynamicNode
         ),
     ],
 )
-def test_computemgtd_config(config_file, expected_attributes, test_datadir, mocker):
+def test_computemgtd_config(config_file, node_description, expected_attributes, test_datadir, mocker):
     mocker.patch("slurm_plugin.computemgtd.ComputemgtdConfig._read_nodename_from_file", return_value="some_nodename")
+    mocker.patch(
+        "slurm_plugin.computemgtd.ComputemgtdConfig._read_node_description_from_file", return_value=node_description
+    )
     mocker.patch("slurm_plugin.computemgtd.check_command_output", return_value=(test_datadir / config_file).read_text())
     compute_config = ComputemgtdConfig("/mocked/config/path")
     for key in expected_attributes:
@@ -113,3 +142,12 @@ def test_self_terminate(mocker, caplog):
     assert_that(caplog.text).contains("Self terminating instance now!")
     run_command_patch.assert_called_with("sudo shutdown -h now")
     sleep_patch.assert_called_with(10)
+
+
+def test_filter_node_description():
+    node = DynamicNode("queue1-st-c5xlarge-1", "ip-1", "host-1", "IDLE+CLOUD+POWERED_DOWN", "queue1")
+    description = node.description()
+    filtered = _filter_node_description(description)
+    assert_that(filtered).is_not_equal_to(description)
+    for k, v in filtered.items():
+        assert_that(v).is_equal_to(description.get(k))

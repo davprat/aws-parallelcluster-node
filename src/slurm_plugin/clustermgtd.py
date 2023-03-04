@@ -60,7 +60,7 @@ CONSOLE_OUTPUT_WAIT_TIME = 5 * 60
 MAXIMUM_TASK_BACKLOG = 100
 log = logging.getLogger(__name__)
 compute_logger = log.getChild("console_output")
-metrics_logger = log.getChild("metrics")
+event_logger = log.getChild("metrics")
 
 
 class ComputeFleetStatus(Enum):
@@ -400,7 +400,7 @@ class ClusterManager:
             self._config = config
             self._event_publisher = ClusterEventPublisher(
                 event_publisher(
-                    metrics_logger, config.cluster_name, "HeadNode", "clustermgtd", config.head_node_instance_id
+                    event_logger, config.cluster_name, "HeadNode", "clustermgtd", config.head_node_instance_id
                 )
             )
             self._compute_fleet_status_manager = ComputeFleetStatusManager()
@@ -800,14 +800,7 @@ class ClusterManager:
         self._instance_manager.delete_instances(
             instances_to_terminate, terminate_batch_size=self._config.terminate_max_batch_size
         )
-        self._event_publisher.publish_event(
-            "INFO",
-            "Terminating instances that are backing powering down nodes",
-            "node-powering-down-instance-count",
-            detail={
-                "count": len(instances_to_terminate),
-            },
-        )
+        self._event_publisher.publish_handle_powering_down_nodes_events(powering_down_nodes, instances_to_terminate)
 
     @log_exception(log, "maintaining unhealthy static nodes", raise_on_error=False)
     def _handle_unhealthy_static_nodes(self, unhealthy_static_nodes):

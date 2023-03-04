@@ -8,10 +8,11 @@
 # or in the "LICENSE.txt" file accompanying this file. This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES
 # OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions and
 # limitations under the License.
-
+import json
 import logging
 import os
 import time
+from collections import ChainMap
 from configparser import ConfigParser
 from datetime import datetime, timezone
 from io import StringIO
@@ -20,7 +21,7 @@ from logging.config import fileConfig
 # A nosec comment is appended to the following line in order to disable the B404 check.
 # In this file the input of the module subprocess is trusted.
 from subprocess import CalledProcessError  # nosec B404
-from typing import Callable
+from typing import Callable, Dict
 
 from botocore.config import Config
 from common.schedulers.slurm_commands import get_nodes_info
@@ -35,7 +36,7 @@ from slurm_plugin.common import (
     log_exception,
     metric_publisher_noop,
 )
-from slurm_plugin.slurm_resources import CONFIG_FILE_DIR
+from slurm_plugin.slurm_resources import CONFIG_FILE_DIR, SlurmNode
 
 LOOP_TIME = 60
 RELOAD_CONFIG_ITERATIONS = 10
@@ -43,7 +44,7 @@ RELOAD_CONFIG_ITERATIONS = 10
 SLURM_PLUGIN_DIR = "/opt/slurm/etc/pcluster/.slurm_plugin"
 COMPUTEMGTD_CONFIG_PATH = f"{SLURM_PLUGIN_DIR}/parallelcluster_computemgtd.conf"
 log = logging.getLogger(__name__)
-metrics_logger = log.getChild("metrics")
+event_logger = log.getChild("metrics")
 
 
 _publish_event: Callable = metric_publisher_noop
@@ -58,6 +59,7 @@ class ComputemgtdConfig:
         "disable_computemgtd_actions": False,
         "clustermgtd_timeout": 600,
         "slurm_nodename_file": os.path.join(CONFIG_FILE_DIR, "slurm_nodename"),
+        "slurm_node_description_file": os.path.join(CONFIG_FILE_DIR, "slurm_node_description.json"),
         "logging_config": os.path.join(
             os.path.dirname(__file__), "logging", "parallelcluster_computemgtd_logging.conf"
         ),
@@ -92,9 +94,6 @@ class ComputemgtdConfig:
         # Get config settings
         self.region = config.get("computemgtd", "region")
         self.cluster_name = config.get("computemgtd", "cluster_name")
-        self.instance_id = config.get("computemgtd", "instance_id", fallback="unknown")
-        self.instance_type = config.get("computemgtd", "instance_type", fallback="unknown")
-        self.availability_zone = config.get("computemgtd", "availability_zone", fallback="unknown")
         # Configure boto3 to retry 1 times by default
         self._boto3_retry = config.getint("clustermgtd", "boto3_retry", fallback=self.DEFAULTS.get("max_retry"))
         self._boto3_config = {"retries": {"max_attempts": self._boto3_retry, "mode": "standard"}}
@@ -115,6 +114,13 @@ class ComputemgtdConfig:
         )
         self.nodename = ComputemgtdConfig._read_nodename_from_file(self._slurm_nodename_file)
 
+        self._slurm_node_description_file = config.get(
+            "computemgtd", "slurm_node_description_file", fallback=self.DEFAULTS.get("slurm_node_description_file")
+        )
+        self.node_description = ComputemgtdConfig._read_node_description_from_file(self._slurm_node_description_file)
+
+        self.instance_id = self.node_description.get("instance-id", "unknown")
+
         proxy = config.get("computemgtd", "proxy", fallback=self.DEFAULTS.get("proxy"))
         if proxy != "NONE":
             self._boto3_config["proxies"] = {"https": proxy}
@@ -134,9 +140,20 @@ class ComputemgtdConfig:
             log.error("Unable to read self nodename from %s with exception: %s\n", nodename_file_path, e)
             raise
 
+    @staticmethod
+    def _read_node_description_from_file(node_description_file_path):
+        """Read self node description from file."""
+        try:
+            with open(node_description_file_path, "r") as node_description_file:
+                node_description = json.load(node_description_file)
+            return node_description
+        except Exception as e:
+            log.error("Unable to read self node description from %s with exception: %s\n", node_description_file, e)
+            return {}
+
 
 @log_exception(log, "self terminating compute instance", catch_exception=CalledProcessError, raise_on_error=False)
-def _self_terminate(self_node=None):
+def _self_terminate():
     """Self terminate the instance."""
     # Sleep for 10 seconds so termination log entries are uploaded to CW logs
     log.info("Preparing to self terminate the instance in 10 seconds!")
@@ -144,9 +161,6 @@ def _self_terminate(self_node=None):
         "INFO",
         "Self terminating instance",
         "node-self-terminate",
-        detail={
-            "node": self_node.description() if self_node else None,
-        },
     )
     time.sleep(10)
     log.info("Self terminating instance now!")
@@ -177,9 +191,6 @@ def _is_self_node_down(self_nodename):
                 "WARNING",
                 "Node is incorrectly attached to scheduler",
                 "node-state-not-attached",
-                detail={
-                    "node": self_node.description(),
-                },
             )
             return True
         log.info("Node is correctly attached to scheduler, not terminating...")
@@ -214,20 +225,30 @@ def _load_daemon_config(config_file):
     return computemgtd_config
 
 
-def _configure_metrics(computemgtd_config):
+def _filter_node_description(node_description: Dict[str, any]):
+    node_description_filter = {
+        "address",
+        "hostname",
+        "partitions",
+        "queue-name",
+        "compute-resource",
+        "node-type",
+    }
+    return {k: v for k, v in node_description.items() if k in node_description_filter}
+
+
+def _configure_metrics(computemgtd_config, self_node: SlurmNode):
     global _publish_event
 
+    description = _filter_node_description(self_node.description())
+
     _publish_event = event_publisher(
-        metrics_logger,
+        event_logger,
         computemgtd_config.cluster_name,
         "ComputeNode",
         "computemgtd",
         computemgtd_config.instance_id,
-        compute={
-            "name": computemgtd_config.nodename,
-            "instance-type": computemgtd_config.instance_type,
-            "availability-zone": computemgtd_config.availability_zone,
-        },
+        compute=dict(ChainMap(description, computemgtd_config.node_description)),
     )
 
 
@@ -238,15 +259,15 @@ def _run_computemgtd(config_file):
     log.info("Initializing clustermgtd heartbeat to be computemgtd startup time: %s", last_heartbeat)
     computemgtd_config = _load_daemon_config(config_file)
     reload_config_counter = RELOAD_CONFIG_ITERATIONS
-    _configure_metrics(computemgtd_config=computemgtd_config)
     self_node = _get_nodes_info_with_retry(computemgtd_config.nodename)[0]
+
+    _configure_metrics(computemgtd_config=computemgtd_config, self_node=self_node)
     _publish_event(
         "INFO",
         "Initializing clustermgtd heartbeat",
         "computemgtd-init",
         detail={
             "heartbeat": str(last_heartbeat),
-            "node": self_node.description() if self_node else None,
         },
     )
 
@@ -267,7 +288,6 @@ def _run_computemgtd(config_file):
                     "configuration-failure-exception",
                     detail={
                         "exception": repr(e),
-                        "node": self_node.description() if self_node else None,
                     },
                 )
         else:
@@ -283,7 +303,6 @@ def _run_computemgtd(config_file):
                 "heartbeat",
                 detail={
                     "last-heartbeat": last_heartbeat.isoformat() if last_heartbeat else None,
-                    "node": self_node.description() if self_node else None,
                 },
             )
         except Exception as e:
@@ -299,14 +318,13 @@ def _run_computemgtd(config_file):
                 detail={
                     "last-heartbeat-exception": last_heartbeat.isoformat() if last_heartbeat else None,
                     "exception": repr(e),
-                    "node": self_node.description() if self_node else None,
                 },
             )
         if expired_clustermgtd_heartbeat(last_heartbeat, current_time, computemgtd_config.clustermgtd_timeout):
             if computemgtd_config.disable_computemgtd_actions:
                 log.info("All computemgtd actions currently disabled")
             elif _is_self_node_down(computemgtd_config.nodename):
-                _self_terminate(self_node)
+                _self_terminate()
 
         sleep_remaining_loop_time(computemgtd_config.loop_time, current_time)
 

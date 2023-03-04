@@ -31,7 +31,7 @@ class EC2Instance:
 
     def description(self):
         return {
-            "instance-id": self.id,
+            "id": self.id,
             "private-ip": self.private_ip,
             "hostname": self.hostname,
             "launch-time": str(self.launch_time),

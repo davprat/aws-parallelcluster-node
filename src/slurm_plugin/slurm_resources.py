@@ -221,7 +221,7 @@ class SlurmNode(metaclass=ABCMeta):
         """Check if node resume timeout expires."""
         return self.states == self.SLURM_SCONTROL_RESUME_FAILED_STATE
 
-    def is_poweing_up_idle(self):
+    def is_powering_up_idle(self):
         """Check if node is in IDLE# state."""
         return self.SLURM_SCONTROL_IDLE_STATE in self.states and self.is_powering_up()
 
@@ -336,7 +336,7 @@ class SlurmNode(metaclass=ABCMeta):
 
     def description(self):
         return {
-            "node-name": self.name,
+            "name": self.name,
             "address": self.nodeaddr,
             "hostname": self.nodehostname,
             "state-string": self.canonical_state_string,
@@ -351,10 +351,6 @@ class SlurmNode(metaclass=ABCMeta):
             "up-time": self.up_time,
             "idle-time": self.idle_time,
             "is-running-job": self.is_running_job(),
-            "static-node-in-replacement": self.is_static_nodes_in_replacement,
-            "is-being-replaced": self.is_being_replaced,
-            "replacement-timeout": self._is_replacement_timeout,
-            "failing-health-check": self.is_failing_health_check,
             "error-code": self.error_code,
             "reason": self.reason,
         }
@@ -545,7 +541,7 @@ class DynamicNode(SlurmNode):
     def is_bootstrap_failure(self):
         """Check if a slurm node has boostrap failure."""
         # no backing instance + [working state]# in node state
-        if (self.is_configuring_job() or self.is_poweing_up_idle()) and not self.is_backing_instance_valid(
+        if (self.is_configuring_job() or self.is_powering_up_idle()) and not self.is_backing_instance_valid(
             log_warn_if_unhealthy=False
         ):
             logger.warning(

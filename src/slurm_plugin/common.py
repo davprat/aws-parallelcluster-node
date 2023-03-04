@@ -160,22 +160,24 @@ event_level_mapping = {
 }
 
 
-def event_publisher(metric_logger, cluster_name, node_role, component, instance_id, **global_args):
-    def emit_event(metric_level, message, event_type, event_supplier=None, **kwargs):
-        log_level = metric_level_mapping.get(metric_level, logging.NOTSET)
-        if metric_logger.isEnabledFor(log_level):
+def event_publisher(event_logger, cluster_name, node_role, component, instance_id, **global_args):
+    def emit_event(event_level, message, event_type, timestamp=None, event_supplier=None, **kwargs):
+        log_level = (
+            metric_level_mapping.get(event_level, logging.NOTSET) if isinstance(event_level, str) else event_level
+        )
+
+        if event_logger.isEnabledFor(log_level):
             event_level = event_level_mapping.get(log_level, "NOTSET")
-            now = datetime.now(timezone.utc)
+            now = timestamp if timestamp else datetime.now(timezone.utc).isoformat(timespec="milliseconds")
             if not event_supplier:
                 event_supplier = [kwargs]
             for details in event_supplier:
                 try:
-                    metric = collections.ChainMap(
+                    event = collections.ChainMap(
                         details,
                         kwargs,
                         {
-                            "datetime": now.isoformat(timespec="milliseconds"),
-                            "timestamp": now.timestamp(),
+                            "datetime": now,
                             "version": 0,
                             "cluster-name": cluster_name,
                             "node-role": node_role,
@@ -189,9 +191,9 @@ def event_publisher(metric_logger, cluster_name, node_role, component, instance_
                         global_args,
                     )
 
-                    metric_logger.log(log_level, "%s", json.dumps(dict(metric)))
-                except Exception:
-                    logger.error("Failed to publish metric: %s", traceback.format_exception(*sys.exc_info()))
+                    event_logger.log(log_level, "%s", json.dumps(dict(event)))
+                except Exception as e:
+                    logger.error("Failed to publish event: %s\n%s", e, traceback.format_exception(*sys.exc_info()))
 
     return emit_event
 

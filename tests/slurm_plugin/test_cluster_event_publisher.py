@@ -65,10 +65,10 @@ def event_handler(received_events: List[Dict]):
                 {"state": "DOWN", "count": 1},
                 {"state": "COMPLETING+DRAIN", "count": 1},
                 {"state": "DOWN+CLOUD", "count": 2},
-                {"dynamic": {"idle-time": 0}, "static": {"idle-time": 0}},
+                {"dynamic": {"idle-time": 0, "idle-count": 0}, "static": {"idle-time": 0, "idle-count": 0}},
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-2",
+                        "name": "queue1-dy-c5xlarge-2",
                         "address": "ip-2",
                         "hostname": "hostname",
                         "state-string": "IDLE+CLOUD+POWERING_DOWN",
@@ -83,17 +83,13 @@ def event_handler(received_events: List[Dict]):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue-dy-c5xlarge-1",
+                        "name": "queue-dy-c5xlarge-1",
                         "address": "ip-3",
                         "hostname": "hostname",
                         "state-string": "IDLE+CLOUD",
@@ -108,17 +104,13 @@ def event_handler(received_events: List[Dict]):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-1",
+                        "name": "queue1-dy-c5xlarge-1",
                         "address": "ip-1",
                         "hostname": "hostname",
                         "state-string": "MIXED+CLOUD+NOT_RESPONDING+POWERING_UP",
@@ -133,17 +125,13 @@ def event_handler(received_events: List[Dict]):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c4xlarge-1",
+                        "name": "queue1-dy-c4xlarge-1",
                         "address": "ip-1",
                         "hostname": "hostname",
                         "state-string": "DOWN",
@@ -158,17 +146,13 @@ def event_handler(received_events: List[Dict]):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-3",
+                        "name": "queue1-dy-c5xlarge-3",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "COMPLETING+DRAIN",
@@ -183,10 +167,6 @@ def event_handler(received_events: List[Dict]):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": True,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientReservedInstanceCapacity",
                         "reason": "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes "
                         "[root@2023-01-31T21:24:55]",
@@ -194,7 +174,7 @@ def event_handler(received_events: List[Dict]):
                 },
                 {
                     "node": {
-                        "node-name": "queue2-dy-c5large-1",
+                        "name": "queue2-dy-c5large-1",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "DOWN+CLOUD",
@@ -209,10 +189,6 @@ def event_handler(received_events: List[Dict]):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientHostCapacity",
                         "reason": "(Code:InsufficientHostCapacity)Failure when resuming nodes "
                         "[root@2023-01-31T21:24:55]",
@@ -220,7 +196,7 @@ def event_handler(received_events: List[Dict]):
                 },
                 {
                     "node": {
-                        "node-name": "queue2-dy-c5large-2",
+                        "name": "queue2-dy-c5large-2",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "DOWN+CLOUD",
@@ -235,13 +211,9 @@ def event_handler(received_events: List[Dict]):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientHostCapacity",
-                        "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node due to "
-                        "insufficient capacity [root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node due to insufficient "
+                        "capacity [root@2023-01-31T21:24:55]",
                     }
                 },
             ],
@@ -257,6 +229,8 @@ def test_publish_cluster_node_events(test_nodes, expected_details):
 
     # Assert calls
     assert_that(received_events).is_length(len(expected_details))
+    for received_event, expected_detail in zip(received_events, expected_details):
+        assert_that(received_event).is_equal_to(expected_detail)
 
 
 @pytest.mark.parametrize(
@@ -313,7 +287,7 @@ def test_publish_cluster_node_events(test_nodes, expected_details):
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-2",
+                        "name": "queue1-dy-c5xlarge-2",
                         "address": "ip-2",
                         "hostname": "hostname",
                         "state-string": "IDLE+CLOUD+POWERING_DOWN",
@@ -328,17 +302,13 @@ def test_publish_cluster_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue-dy-c5xlarge-1",
+                        "name": "queue-dy-c5xlarge-1",
                         "address": "ip-3",
                         "hostname": "hostname",
                         "state-string": "IDLE+CLOUD",
@@ -353,17 +323,13 @@ def test_publish_cluster_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-1",
+                        "name": "queue1-dy-c5xlarge-1",
                         "address": "ip-1",
                         "hostname": "hostname",
                         "state-string": "MIXED+CLOUD+NOT_RESPONDING+POWERING_UP",
@@ -378,17 +344,13 @@ def test_publish_cluster_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c4xlarge-1",
+                        "name": "queue1-dy-c4xlarge-1",
                         "address": "ip-1",
                         "hostname": "hostname",
                         "state-string": "DOWN",
@@ -403,17 +365,13 @@ def test_publish_cluster_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-3",
+                        "name": "queue1-dy-c5xlarge-3",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "COMPLETING+DRAIN",
@@ -428,10 +386,6 @@ def test_publish_cluster_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": True,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientReservedInstanceCapacity",
                         "reason": "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes "
                         "[root@2023-01-31T21:24:55]",
@@ -439,7 +393,7 @@ def test_publish_cluster_node_events(test_nodes, expected_details):
                 },
                 {
                     "node": {
-                        "node-name": "queue2-dy-c5large-1",
+                        "name": "queue2-dy-c5large-1",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "DOWN+CLOUD",
@@ -454,10 +408,6 @@ def test_publish_cluster_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientHostCapacity",
                         "reason": "(Code:InsufficientHostCapacity)Failure when resuming nodes "
                         "[root@2023-01-31T21:24:55]",
@@ -465,7 +415,7 @@ def test_publish_cluster_node_events(test_nodes, expected_details):
                 },
                 {
                     "node": {
-                        "node-name": "queue2-dy-c5large-2",
+                        "name": "queue2-dy-c5large-2",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "DOWN+CLOUD",
@@ -480,13 +430,9 @@ def test_publish_cluster_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientHostCapacity",
-                        "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node due to "
-                        "insufficient capacity [root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node due to insufficient "
+                        "capacity [root@2023-01-31T21:24:55]",
                     }
                 },
             ],
@@ -502,6 +448,233 @@ def test_publish_powering_down_node_events(test_nodes, expected_details):
 
     # Assert calls
     assert_that(received_events).is_length(len(expected_details))
+    for received_event, expected_detail in zip(received_events, expected_details):
+        assert_that(received_event).is_equal_to(expected_detail)
+
+
+@pytest.mark.parametrize(
+    "test_nodes, expected_details",
+    [
+        (
+            [
+                DynamicNode(
+                    "queue1-dy-c5xlarge-2",
+                    "ip-2",
+                    "hostname",
+                    "IDLE+CLOUD+POWERING_DOWN",
+                    "queue1",
+                    instance=EC2Instance("id-2", "ip-2", "hostname", "some_launch_time"),
+                ),  # powering_down
+                DynamicNode(
+                    "queue-dy-c5xlarge-1",
+                    "ip-3",
+                    "hostname",
+                    "IDLE+CLOUD",
+                    "queue",
+                    instance=EC2Instance("id-1", "ip-1", "hostname", datetime(2020, 1, 1, 0, 0, 0)),
+                ),
+                DynamicNode(
+                    "queue1-dy-c5xlarge-1",
+                    "ip-1",
+                    "hostname",
+                    "MIXED+CLOUD+NOT_RESPONDING+POWERING_UP",
+                    "queue1",
+                    instance=EC2Instance("id-2", "ip-4", "hostname", datetime(2020, 1, 1, 0, 0, 0)),
+                ),  # bootstrap failure dynamic
+                DynamicNode(
+                    "queue1-dy-c4xlarge-1",
+                    "ip-1",
+                    "hostname",
+                    "DOWN",
+                    "queue1",
+                    instance=EC2Instance("id-5", "ip-5", "hostname", "some_launch_time"),
+                ),
+                DynamicNode(
+                    "queue1-dy-c5xlarge-3",
+                    "nodeip",
+                    "nodehostname",
+                    "COMPLETING+DRAIN",
+                    "queue1",
+                    "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes [root@2023-01-31T21:24:55]",
+                    instance=EC2Instance("id-6", "ip-6", "hostname", "some_launch_time"),
+                ),
+                DynamicNode(
+                    "queue2-dy-c5large-1",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:InsufficientHostCapacity)Failure when resuming nodes [root@2023-01-31T21:24:55]",
+                ),
+                DynamicNode(
+                    "queue2-dy-c5large-2",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:InsufficientHostCapacity)Temporarily disabling node due to insufficient capacity "
+                    "[root@2023-01-31T21:24:55]",
+                ),
+            ],
+            [
+                {
+                    "count": 5,
+                    "nodes": [
+                        {"name": "queue1-dy-c5xlarge-2", "id": "id-2"},
+                        {"name": "queue-dy-c5xlarge-1", "id": "id-1"},
+                        {"name": "queue1-dy-c5xlarge-1", "id": "id-2"},
+                        {"name": "queue1-dy-c4xlarge-1", "id": "id-5"},
+                        {"name": "queue1-dy-c5xlarge-3", "id": "id-6"},
+                    ],
+                },
+                {
+                    "node": {
+                        "name": "queue1-dy-c5xlarge-2",
+                        "address": "ip-2",
+                        "hostname": "hostname",
+                        "state-string": "IDLE+CLOUD+POWERING_DOWN",
+                        "state": "IDLE",
+                        "state-flags": ["CLOUD", "POWERING_DOWN"],
+                        "partitions": ["queue1"],
+                        "queue-name": "queue1",
+                        "compute-resource": "c5xlarge",
+                        "node-type": "dy",
+                        "instance": {
+                            "id": "id-2",
+                            "private-ip": "ip-2",
+                            "hostname": "hostname",
+                            "launch-time": "some_launch_time",
+                        },
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": False,
+                        "error-code": None,
+                        "reason": None,
+                    }
+                },
+                {
+                    "node": {
+                        "name": "queue-dy-c5xlarge-1",
+                        "address": "ip-3",
+                        "hostname": "hostname",
+                        "state-string": "IDLE+CLOUD",
+                        "state": "IDLE",
+                        "state-flags": ["CLOUD"],
+                        "partitions": ["queue"],
+                        "queue-name": "queue",
+                        "compute-resource": "c5xlarge",
+                        "node-type": "dy",
+                        "instance": {
+                            "id": "id-1",
+                            "private-ip": "ip-1",
+                            "hostname": "hostname",
+                            "launch-time": "2020-01-01 00:00:00",
+                        },
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": False,
+                        "error-code": None,
+                        "reason": None,
+                    }
+                },
+                {
+                    "node": {
+                        "name": "queue1-dy-c5xlarge-1",
+                        "address": "ip-1",
+                        "hostname": "hostname",
+                        "state-string": "MIXED+CLOUD+NOT_RESPONDING+POWERING_UP",
+                        "state": "MIXED",
+                        "state-flags": ["CLOUD", "NOT_RESPONDING", "POWERING_UP"],
+                        "partitions": ["queue1"],
+                        "queue-name": "queue1",
+                        "compute-resource": "c5xlarge",
+                        "node-type": "dy",
+                        "instance": {
+                            "id": "id-2",
+                            "private-ip": "ip-4",
+                            "hostname": "hostname",
+                            "launch-time": "2020-01-01 00:00:00",
+                        },
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": False,
+                        "error-code": None,
+                        "reason": None,
+                    }
+                },
+                {
+                    "node": {
+                        "name": "queue1-dy-c4xlarge-1",
+                        "address": "ip-1",
+                        "hostname": "hostname",
+                        "state-string": "DOWN",
+                        "state": "DOWN",
+                        "state-flags": [],
+                        "partitions": ["queue1"],
+                        "queue-name": "queue1",
+                        "compute-resource": "c4xlarge",
+                        "node-type": "dy",
+                        "instance": {
+                            "id": "id-5",
+                            "private-ip": "ip-5",
+                            "hostname": "hostname",
+                            "launch-time": "some_launch_time",
+                        },
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": False,
+                        "error-code": None,
+                        "reason": None,
+                    }
+                },
+                {
+                    "node": {
+                        "name": "queue1-dy-c5xlarge-3",
+                        "address": "nodeip",
+                        "hostname": "nodehostname",
+                        "state-string": "COMPLETING+DRAIN",
+                        "state": "COMPLETING",
+                        "state-flags": ["DRAIN"],
+                        "partitions": ["queue1"],
+                        "queue-name": "queue1",
+                        "compute-resource": "c5xlarge",
+                        "node-type": "dy",
+                        "instance": {
+                            "id": "id-6",
+                            "private-ip": "ip-6",
+                            "hostname": "hostname",
+                            "launch-time": "some_launch_time",
+                        },
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": True,
+                        "error-code": "InsufficientReservedInstanceCapacity",
+                        "reason": "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes "
+                        "[root@2023-01-31T21:24:55]",
+                    }
+                },
+            ],
+        ),
+    ],
+)
+def test_publish_handle_powering_down_node_events(test_nodes, expected_details):
+    received_events = []
+    event_publisher = ClusterEventPublisher(event_handler(received_events))
+
+    instances_to_terminate = [node.instance.id for node in test_nodes if node.instance]
+
+    # Run test
+    event_publisher.publish_handle_powering_down_nodes_events(test_nodes, instances_to_terminate)
+
+    # Assert calls
+    assert_that(received_events).is_length(len(expected_details))
+    for received_event, expected_detail in zip(received_events, expected_details):
+        assert_that(received_event).is_equal_to(expected_detail)
 
 
 @pytest.mark.parametrize(
@@ -558,7 +731,7 @@ def test_publish_powering_down_node_events(test_nodes, expected_details):
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-2",
+                        "name": "queue1-dy-c5xlarge-2",
                         "address": "ip-2",
                         "hostname": "hostname",
                         "state-string": "IDLE+CLOUD+POWERING_DOWN",
@@ -573,17 +746,13 @@ def test_publish_powering_down_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue-dy-c5xlarge-1",
+                        "name": "queue-dy-c5xlarge-1",
                         "address": "ip-3",
                         "hostname": "hostname",
                         "state-string": "IDLE+CLOUD",
@@ -598,17 +767,13 @@ def test_publish_powering_down_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-1",
+                        "name": "queue1-dy-c5xlarge-1",
                         "address": "ip-1",
                         "hostname": "hostname",
                         "state-string": "MIXED+CLOUD+NOT_RESPONDING+POWERING_UP",
@@ -623,17 +788,13 @@ def test_publish_powering_down_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c4xlarge-1",
+                        "name": "queue1-dy-c4xlarge-1",
                         "address": "ip-1",
                         "hostname": "hostname",
                         "state-string": "DOWN",
@@ -648,17 +809,13 @@ def test_publish_powering_down_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-3",
+                        "name": "queue1-dy-c5xlarge-3",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "COMPLETING+DRAIN",
@@ -673,10 +830,6 @@ def test_publish_powering_down_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": True,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientReservedInstanceCapacity",
                         "reason": "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes "
                         "[root@2023-01-31T21:24:55]",
@@ -684,7 +837,7 @@ def test_publish_powering_down_node_events(test_nodes, expected_details):
                 },
                 {
                     "node": {
-                        "node-name": "queue2-dy-c5large-1",
+                        "name": "queue2-dy-c5large-1",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "DOWN+CLOUD",
@@ -699,10 +852,6 @@ def test_publish_powering_down_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientHostCapacity",
                         "reason": "(Code:InsufficientHostCapacity)Failure when resuming nodes "
                         "[root@2023-01-31T21:24:55]",
@@ -710,7 +859,7 @@ def test_publish_powering_down_node_events(test_nodes, expected_details):
                 },
                 {
                     "node": {
-                        "node-name": "queue2-dy-c5large-2",
+                        "name": "queue2-dy-c5large-2",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "DOWN+CLOUD",
@@ -725,13 +874,9 @@ def test_publish_powering_down_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientHostCapacity",
-                        "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node due to "
-                        "insufficient capacity [root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node due to insufficient "
+                        "capacity [root@2023-01-31T21:24:55]",
                     }
                 },
             ],
@@ -747,6 +892,8 @@ def test_publish_unhealthy_dynamic_node_events(test_nodes, expected_details):
 
     # Assert calls
     assert_that(received_events).is_length(len(expected_details))
+    for received_event, expected_detail in zip(received_events, expected_details):
+        assert_that(received_event).is_equal_to(expected_detail)
 
 
 @pytest.mark.parametrize(
@@ -823,11 +970,14 @@ def test_publish_unhealthy_dynamic_node_action_events(test_nodes, expected_detai
 
     instances_to_terminate = [node.name for node in test_nodes]
     power_down_nodes = [node.name for node in test_nodes]
+
     # Run test
     event_publisher.publish_unhealthy_dynamic_node_action_events(instances_to_terminate, power_down_nodes)
 
     # Assert calls
     assert_that(received_events).is_length(len(expected_details))
+    for received_event, expected_detail in zip(received_events, expected_details):
+        assert_that(received_event).is_equal_to(expected_detail)
 
 
 @pytest.mark.parametrize(
@@ -884,7 +1034,7 @@ def test_publish_unhealthy_dynamic_node_action_events(test_nodes, expected_detai
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-2",
+                        "name": "queue1-dy-c5xlarge-2",
                         "address": "ip-2",
                         "hostname": "hostname",
                         "state-string": "IDLE+CLOUD+POWERING_DOWN",
@@ -899,17 +1049,13 @@ def test_publish_unhealthy_dynamic_node_action_events(test_nodes, expected_detai
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue-dy-c5xlarge-1",
+                        "name": "queue-dy-c5xlarge-1",
                         "address": "ip-3",
                         "hostname": "hostname",
                         "state-string": "IDLE+CLOUD",
@@ -924,17 +1070,13 @@ def test_publish_unhealthy_dynamic_node_action_events(test_nodes, expected_detai
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-1",
+                        "name": "queue1-dy-c5xlarge-1",
                         "address": "ip-1",
                         "hostname": "hostname",
                         "state-string": "MIXED+CLOUD+NOT_RESPONDING+POWERING_UP",
@@ -949,17 +1091,13 @@ def test_publish_unhealthy_dynamic_node_action_events(test_nodes, expected_detai
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c4xlarge-1",
+                        "name": "queue1-dy-c4xlarge-1",
                         "address": "ip-1",
                         "hostname": "hostname",
                         "state-string": "DOWN",
@@ -974,17 +1112,13 @@ def test_publish_unhealthy_dynamic_node_action_events(test_nodes, expected_detai
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-3",
+                        "name": "queue1-dy-c5xlarge-3",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "COMPLETING+DRAIN",
@@ -999,10 +1133,6 @@ def test_publish_unhealthy_dynamic_node_action_events(test_nodes, expected_detai
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": True,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientReservedInstanceCapacity",
                         "reason": "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes "
                         "[root@2023-01-31T21:24:55]",
@@ -1010,7 +1140,7 @@ def test_publish_unhealthy_dynamic_node_action_events(test_nodes, expected_detai
                 },
                 {
                     "node": {
-                        "node-name": "queue2-dy-c5large-1",
+                        "name": "queue2-dy-c5large-1",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "DOWN+CLOUD",
@@ -1025,10 +1155,6 @@ def test_publish_unhealthy_dynamic_node_action_events(test_nodes, expected_detai
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientHostCapacity",
                         "reason": "(Code:InsufficientHostCapacity)Failure when resuming nodes "
                         "[root@2023-01-31T21:24:55]",
@@ -1036,7 +1162,7 @@ def test_publish_unhealthy_dynamic_node_action_events(test_nodes, expected_detai
                 },
                 {
                     "node": {
-                        "node-name": "queue2-dy-c5large-2",
+                        "name": "queue2-dy-c5large-2",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "DOWN+CLOUD",
@@ -1051,13 +1177,9 @@ def test_publish_unhealthy_dynamic_node_action_events(test_nodes, expected_detai
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientHostCapacity",
-                        "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node due to "
-                        "insufficient capacity [root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node due to insufficient "
+                        "capacity [root@2023-01-31T21:24:55]",
                     }
                 },
             ],
@@ -1073,6 +1195,8 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
 
     # Assert calls
     assert_that(received_events).is_length(len(expected_details))
+    for received_event, expected_detail in zip(received_events, expected_details):
+        assert_that(received_event).is_equal_to(expected_detail)
 
 
 @pytest.mark.parametrize(
@@ -1129,7 +1253,7 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-2",
+                        "name": "queue1-dy-c5xlarge-2",
                         "address": "ip-2",
                         "hostname": "hostname",
                         "state-string": "IDLE+CLOUD+POWERING_DOWN",
@@ -1144,17 +1268,13 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue-dy-c5xlarge-1",
+                        "name": "queue-dy-c5xlarge-1",
                         "address": "ip-3",
                         "hostname": "hostname",
                         "state-string": "IDLE+CLOUD",
@@ -1169,17 +1289,13 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-1",
+                        "name": "queue1-dy-c5xlarge-1",
                         "address": "ip-1",
                         "hostname": "hostname",
                         "state-string": "MIXED+CLOUD+NOT_RESPONDING+POWERING_UP",
@@ -1194,17 +1310,13 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c4xlarge-1",
+                        "name": "queue1-dy-c4xlarge-1",
                         "address": "ip-1",
                         "hostname": "hostname",
                         "state-string": "DOWN",
@@ -1219,17 +1331,13 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-3",
+                        "name": "queue1-dy-c5xlarge-3",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "COMPLETING+DRAIN",
@@ -1244,10 +1352,6 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": True,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientReservedInstanceCapacity",
                         "reason": "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes "
                         "[root@2023-01-31T21:24:55]",
@@ -1255,7 +1359,7 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                 },
                 {
                     "node": {
-                        "node-name": "queue2-dy-c5large-1",
+                        "name": "queue2-dy-c5large-1",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "DOWN+CLOUD",
@@ -1270,10 +1374,6 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientHostCapacity",
                         "reason": "(Code:InsufficientHostCapacity)Failure when resuming nodes "
                         "[root@2023-01-31T21:24:55]",
@@ -1281,7 +1381,7 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                 },
                 {
                     "node": {
-                        "node-name": "queue2-dy-c5large-2",
+                        "name": "queue2-dy-c5large-2",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "DOWN+CLOUD",
@@ -1296,13 +1396,9 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientHostCapacity",
-                        "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node due to "
-                        "insufficient capacity [root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node due to insufficient "
+                        "capacity [root@2023-01-31T21:24:55]",
                     }
                 },
                 {
@@ -1312,7 +1408,7 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-3",
+                        "name": "queue1-dy-c5xlarge-3",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "COMPLETING+DRAIN",
@@ -1327,10 +1423,6 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": True,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientReservedInstanceCapacity",
                         "reason": "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes "
                         "[root@2023-01-31T21:24:55]",
@@ -1344,7 +1436,7 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                 },
                 {
                     "node": {
-                        "node-name": "queue2-dy-c5large-1",
+                        "name": "queue2-dy-c5large-1",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "DOWN+CLOUD",
@@ -1359,10 +1451,6 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientHostCapacity",
                         "reason": "(Code:InsufficientHostCapacity)Failure when resuming nodes "
                         "[root@2023-01-31T21:24:55]",
@@ -1371,7 +1459,7 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                 },
                 {
                     "node": {
-                        "node-name": "queue2-dy-c5large-2",
+                        "name": "queue2-dy-c5large-2",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "DOWN+CLOUD",
@@ -1386,13 +1474,9 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientHostCapacity",
-                        "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node due to "
-                        "insufficient capacity [root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node due to insufficient "
+                        "capacity [root@2023-01-31T21:24:55]",
                     },
                     "error-code": "InsufficientHostCapacity",
                 },
@@ -1415,6 +1499,8 @@ def test_publish_static_nodes_in_replacement(test_nodes, expected_details):
 
     # Assert calls
     assert_that(received_events).is_length(len(expected_details))
+    for received_event, expected_detail in zip(received_events, expected_details):
+        assert_that(received_event).is_equal_to(expected_detail)
 
 
 @pytest.mark.parametrize(
@@ -1457,25 +1543,34 @@ def test_publish_static_nodes_in_replacement(test_nodes, expected_details):
                 ),
             ],
             [
-                {"count": 3},
+                {
+                    "count": 3,
+                    "nodes": [
+                        {"name": "queue1-dy-c5xlarge-3"},
+                        {"name": "queue2-dy-c5large-1"},
+                        {"name": "queue2-dy-c5large-2"},
+                    ],
+                },
                 {
                     "partition": "queue1",
                     "resource": "c5xlarge",
                     "error-code": "InsufficientReservedInstanceCapacity",
                     "count": 1,
+                    "nodes": [{"name": "queue1-dy-c5xlarge-3"}],
                 },
                 {
                     "partition": "queue2",
                     "resource": "c5large",
                     "error-code": "InsufficientHostCapacity",
                     "count": 2,
+                    "nodes": [{"name": "queue2-dy-c5large-1"}, {"name": "queue2-dy-c5large-2"}],
                 },
                 {
                     "partition": "queue1",
                     "resource": "c5xlarge",
                     "error-code": "InsufficientReservedInstanceCapacity",
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-3",
+                        "name": "queue1-dy-c5xlarge-3",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "COMPLETING+DRAIN",
@@ -1490,10 +1585,6 @@ def test_publish_static_nodes_in_replacement(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": True,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientReservedInstanceCapacity",
                         "reason": "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes "
                         "[root@2023-01-31T21:24:55]",
@@ -1504,7 +1595,7 @@ def test_publish_static_nodes_in_replacement(test_nodes, expected_details):
                     "resource": "c5large",
                     "error-code": "InsufficientHostCapacity",
                     "node": {
-                        "node-name": "queue2-dy-c5large-1",
+                        "name": "queue2-dy-c5large-1",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "DOWN+CLOUD",
@@ -1519,10 +1610,6 @@ def test_publish_static_nodes_in_replacement(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientHostCapacity",
                         "reason": "(Code:InsufficientHostCapacity)Failure when resuming nodes "
                         "[root@2023-01-31T21:24:55]",
@@ -1533,7 +1620,7 @@ def test_publish_static_nodes_in_replacement(test_nodes, expected_details):
                     "resource": "c5large",
                     "error-code": "InsufficientHostCapacity",
                     "node": {
-                        "node-name": "queue2-dy-c5large-2",
+                        "name": "queue2-dy-c5large-2",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "DOWN+CLOUD",
@@ -1548,10 +1635,6 @@ def test_publish_static_nodes_in_replacement(test_nodes, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientHostCapacity",
                         "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node due to insufficient "
                         "capacity [root@2023-01-31T21:24:55]",
@@ -1593,11 +1676,7 @@ def test_publish_static_nodes_in_replacement(test_nodes, expected_details):
                     "[root@2023-01-31T21:24:55]",
                 ),
             ],
-            [
-                {
-                    "count": 0,
-                },
-            ],
+            [{"count": 0, "nodes": []}],
         ),
     ],
     ids=["sample_of_errors", "no_ice_errors"],
@@ -1622,6 +1701,8 @@ def test_publish_insufficient_capacity_events(
 
     # Assert calls
     assert_that(received_events).is_length(len(expected_details))
+    for received_event, expected_detail in zip(received_events, expected_details):
+        assert_that(received_event).is_equal_to(expected_detail)
 
 
 @pytest.mark.parametrize(
@@ -1643,7 +1724,7 @@ def test_publish_insufficient_capacity_events(
                 },
                 {
                     "instance": {
-                        "instance-id": "id-2",
+                        "id": "id-2",
                         "private-ip": "ip-2",
                         "hostname": "hostname",
                         "launch-time": "some_launch_time",
@@ -1651,7 +1732,7 @@ def test_publish_insufficient_capacity_events(
                 },
                 {
                     "instance": {
-                        "instance-id": "id-1",
+                        "id": "id-1",
                         "private-ip": "ip-1",
                         "hostname": "hostname",
                         "launch-time": "2020-01-01 00:00:00",
@@ -1659,7 +1740,7 @@ def test_publish_insufficient_capacity_events(
                 },
                 {
                     "instance": {
-                        "instance-id": "id-2",
+                        "id": "id-2",
                         "private-ip": "ip-4",
                         "hostname": "hostname",
                         "launch-time": "2020-01-01 00:00:00",
@@ -1667,7 +1748,7 @@ def test_publish_insufficient_capacity_events(
                 },
                 {
                     "instance": {
-                        "instance-id": "id-5",
+                        "id": "id-5",
                         "private-ip": "ip-5",
                         "hostname": "hostname",
                         "launch-time": "some_launch_time",
@@ -1675,7 +1756,7 @@ def test_publish_insufficient_capacity_events(
                 },
                 {
                     "instance": {
-                        "instance-id": "id-6",
+                        "id": "id-6",
                         "private-ip": "ip-6",
                         "hostname": "hostname",
                         "launch-time": "some_launch_time",
@@ -1696,6 +1777,8 @@ def test_publish_orphaned_instance_events(test_instances, expected_details):
 
     # Assert calls
     assert_that(received_events).is_length(len(expected_details))
+    for received_event, expected_detail in zip(received_events, expected_details):
+        assert_that(received_event).is_equal_to(expected_detail)
 
 
 @pytest.mark.parametrize(
@@ -1738,6 +1821,8 @@ def test_publish_entering_protected_mode_events(test_map, expected_details):
 
     # Assert calls
     assert_that(received_events).is_length(len(expected_details))
+    for received_event, expected_detail in zip(received_events, expected_details):
+        assert_that(received_event).is_equal_to(expected_detail)
 
 
 @pytest.mark.parametrize(
@@ -1809,7 +1894,7 @@ def test_publish_entering_protected_mode_events(test_map, expected_details):
                 {
                     "health-check-type": "TriedToWalkInsteadOfRun",
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-2",
+                        "name": "queue1-dy-c5xlarge-2",
                         "address": "ip-2",
                         "hostname": "hostname",
                         "state-string": "IDLE+CLOUD+POWERING_DOWN",
@@ -1824,10 +1909,6 @@ def test_publish_entering_protected_mode_events(test_map, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     },
@@ -1835,7 +1916,7 @@ def test_publish_entering_protected_mode_events(test_map, expected_details):
                 {
                     "health-check-type": "TriedToWalkInsteadOfRun",
                     "node": {
-                        "node-name": "queue-dy-c5xlarge-1",
+                        "name": "queue-dy-c5xlarge-1",
                         "address": "ip-3",
                         "hostname": "hostname",
                         "state-string": "IDLE+CLOUD",
@@ -1850,10 +1931,6 @@ def test_publish_entering_protected_mode_events(test_map, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     },
@@ -1861,7 +1938,7 @@ def test_publish_entering_protected_mode_events(test_map, expected_details):
                 {
                     "health-check-type": "TriedToWalkInsteadOfRun",
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-1",
+                        "name": "queue1-dy-c5xlarge-1",
                         "address": "ip-1",
                         "hostname": "hostname",
                         "state-string": "MIXED+CLOUD+NOT_RESPONDING+POWERING_UP",
@@ -1876,10 +1953,6 @@ def test_publish_entering_protected_mode_events(test_map, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     },
@@ -1887,7 +1960,7 @@ def test_publish_entering_protected_mode_events(test_map, expected_details):
                 {
                     "health-check-type": "TriedToWalkInsteadOfRun",
                     "node": {
-                        "node-name": "queue1-dy-c4xlarge-1",
+                        "name": "queue1-dy-c4xlarge-1",
                         "address": "ip-1",
                         "hostname": "hostname",
                         "state-string": "DOWN",
@@ -1902,10 +1975,6 @@ def test_publish_entering_protected_mode_events(test_map, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     },
@@ -1913,7 +1982,7 @@ def test_publish_entering_protected_mode_events(test_map, expected_details):
                 {
                     "health-check-type": "TriedToWalkInsteadOfRun",
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-3",
+                        "name": "queue1-dy-c5xlarge-3",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "COMPLETING+DRAIN",
@@ -1928,10 +1997,6 @@ def test_publish_entering_protected_mode_events(test_map, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": True,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientReservedInstanceCapacity",
                         "reason": "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes "
                         "[root@2023-01-31T21:24:55]",
@@ -1940,7 +2005,7 @@ def test_publish_entering_protected_mode_events(test_map, expected_details):
                 {
                     "health-check-type": "TriedToWalkInsteadOfRun",
                     "node": {
-                        "node-name": "queue2-dy-c5large-1",
+                        "name": "queue2-dy-c5large-1",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "DOWN+CLOUD",
@@ -1955,10 +2020,6 @@ def test_publish_entering_protected_mode_events(test_map, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientHostCapacity",
                         "reason": "(Code:InsufficientHostCapacity)Failure when resuming nodes "
                         "[root@2023-01-31T21:24:55]",
@@ -1967,7 +2028,7 @@ def test_publish_entering_protected_mode_events(test_map, expected_details):
                 {
                     "health-check-type": "TriedToWalkInsteadOfRun",
                     "node": {
-                        "node-name": "queue2-dy-c5large-2",
+                        "name": "queue2-dy-c5large-2",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "DOWN+CLOUD",
@@ -1982,13 +2043,9 @@ def test_publish_entering_protected_mode_events(test_map, expected_details):
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientHostCapacity",
-                        "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node due to "
-                        "insufficient capacity [root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node due to insufficient "
+                        "capacity [root@2023-01-31T21:24:55]",
                     },
                 },
             ],
@@ -2004,6 +2061,8 @@ def test_publish_nodes_failing_health_check_events(test_nodes, expected_details)
 
     # Assert calls
     assert_that(received_events).is_length(len(expected_details))
+    for received_event, expected_detail in zip(received_events, expected_details):
+        assert_that(received_event).is_equal_to(expected_detail)
 
 
 @pytest.mark.parametrize(
@@ -2060,7 +2119,7 @@ def test_publish_nodes_failing_health_check_events(test_nodes, expected_details)
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-2",
+                        "name": "queue1-dy-c5xlarge-2",
                         "address": "ip-2",
                         "hostname": "hostname",
                         "state-string": "IDLE+CLOUD+POWERING_DOWN",
@@ -2075,17 +2134,13 @@ def test_publish_nodes_failing_health_check_events(test_nodes, expected_details)
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue-dy-c5xlarge-1",
+                        "name": "queue-dy-c5xlarge-1",
                         "address": "ip-3",
                         "hostname": "hostname",
                         "state-string": "IDLE+CLOUD",
@@ -2100,17 +2155,13 @@ def test_publish_nodes_failing_health_check_events(test_nodes, expected_details)
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-1",
+                        "name": "queue1-dy-c5xlarge-1",
                         "address": "ip-1",
                         "hostname": "hostname",
                         "state-string": "MIXED+CLOUD+NOT_RESPONDING+POWERING_UP",
@@ -2125,17 +2176,13 @@ def test_publish_nodes_failing_health_check_events(test_nodes, expected_details)
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c4xlarge-1",
+                        "name": "queue1-dy-c4xlarge-1",
                         "address": "ip-1",
                         "hostname": "hostname",
                         "state-string": "DOWN",
@@ -2150,17 +2197,13 @@ def test_publish_nodes_failing_health_check_events(test_nodes, expected_details)
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": None,
                         "reason": None,
                     }
                 },
                 {
                     "node": {
-                        "node-name": "queue1-dy-c5xlarge-3",
+                        "name": "queue1-dy-c5xlarge-3",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "COMPLETING+DRAIN",
@@ -2175,10 +2218,6 @@ def test_publish_nodes_failing_health_check_events(test_nodes, expected_details)
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": True,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientReservedInstanceCapacity",
                         "reason": "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes "
                         "[root@2023-01-31T21:24:55]",
@@ -2186,7 +2225,7 @@ def test_publish_nodes_failing_health_check_events(test_nodes, expected_details)
                 },
                 {
                     "node": {
-                        "node-name": "queue2-dy-c5large-1",
+                        "name": "queue2-dy-c5large-1",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "DOWN+CLOUD",
@@ -2201,10 +2240,6 @@ def test_publish_nodes_failing_health_check_events(test_nodes, expected_details)
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientHostCapacity",
                         "reason": "(Code:InsufficientHostCapacity)Failure when resuming nodes "
                         "[root@2023-01-31T21:24:55]",
@@ -2212,7 +2247,7 @@ def test_publish_nodes_failing_health_check_events(test_nodes, expected_details)
                 },
                 {
                     "node": {
-                        "node-name": "queue2-dy-c5large-2",
+                        "name": "queue2-dy-c5large-2",
                         "address": "nodeip",
                         "hostname": "nodehostname",
                         "state-string": "DOWN+CLOUD",
@@ -2227,13 +2262,9 @@ def test_publish_nodes_failing_health_check_events(test_nodes, expected_details)
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
-                        "static-node-in-replacement": False,
-                        "is-being-replaced": False,
-                        "replacement-timeout": False,
-                        "failing-health-check": False,
                         "error-code": "InsufficientHostCapacity",
-                        "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node "
-                        "due to insufficient capacity [root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node due to insufficient "
+                        "capacity [root@2023-01-31T21:24:55]",
                     }
                 },
             ],
@@ -2249,6 +2280,8 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
 
     # Assert calls
     assert_that(received_events).is_length(len(expected_details))
+    for received_event, expected_detail in zip(received_events, expected_details):
+        assert_that(received_event).is_equal_to(expected_detail)
 
 
 @pytest.mark.parametrize(
@@ -2305,17 +2338,17 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
                 {
                     "count": 5,
                     "nodes": [
-                        {"name": "node-id-2", "instance-id": "id-2"},
-                        {"name": "node-id-1", "instance-id": "id-1"},
-                        {"name": "node-id-2", "instance-id": "id-2"},
-                        {"name": "node-id-5", "instance-id": "id-5"},
-                        {"name": "node-id-6", "instance-id": "id-6"},
+                        {"name": "node-id-2", "id": "id-2"},
+                        {"name": "node-id-1", "id": "id-1"},
+                        {"name": "node-id-2", "id": "id-2"},
+                        {"name": "node-id-5", "id": "id-5"},
+                        {"name": "node-id-6", "id": "id-6"},
                     ],
                 },
                 {
                     "node": {"name": "node-id-2"},
                     "instance": {
-                        "instance-id": "id-2",
+                        "id": "id-2",
                         "private-ip": "ip-2",
                         "hostname": "hostname",
                         "launch-time": "some_launch_time",
@@ -2324,7 +2357,7 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
                 {
                     "node": {"name": "node-id-1"},
                     "instance": {
-                        "instance-id": "id-1",
+                        "id": "id-1",
                         "private-ip": "ip-1",
                         "hostname": "hostname",
                         "launch-time": "2020-01-01 00:00:00",
@@ -2333,7 +2366,7 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
                 {
                     "node": {"name": "node-id-2"},
                     "instance": {
-                        "instance-id": "id-2",
+                        "id": "id-2",
                         "private-ip": "ip-4",
                         "hostname": "hostname",
                         "launch-time": "2020-01-01 00:00:00",
@@ -2342,7 +2375,7 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
                 {
                     "node": {"name": "node-id-5"},
                     "instance": {
-                        "instance-id": "id-5",
+                        "id": "id-5",
                         "private-ip": "ip-5",
                         "hostname": "hostname",
                         "launch-time": "some_launch_time",
@@ -2351,7 +2384,7 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
                 {
                     "node": {"name": "node-id-6"},
                     "instance": {
-                        "instance-id": "id-6",
+                        "id": "id-6",
                         "private-ip": "ip-6",
                         "hostname": "hostname",
                         "launch-time": "some_launch_time",
@@ -2417,17 +2450,17 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
                 {
                     "count": 5,
                     "nodes": [
-                        {"name": "node-id-2", "instance-id": "id-2"},
-                        {"name": "node-id-1", "instance-id": "id-1"},
-                        {"name": "node-id-2", "instance-id": "id-2"},
-                        {"name": "node-id-5", "instance-id": "id-5"},
-                        {"name": "node-id-6", "instance-id": "id-6"},
+                        {"name": "node-id-2", "id": "id-2"},
+                        {"name": "node-id-1", "id": "id-1"},
+                        {"name": "node-id-2", "id": "id-2"},
+                        {"name": "node-id-5", "id": "id-5"},
+                        {"name": "node-id-6", "id": "id-6"},
                     ],
                 },
                 {
                     "node": {"name": "node-id-2"},
                     "instance": {
-                        "instance-id": "id-2",
+                        "id": "id-2",
                         "private-ip": "ip-2",
                         "hostname": "hostname",
                         "launch-time": "some_launch_time",
@@ -2436,7 +2469,7 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
                 {
                     "node": {"name": "node-id-1"},
                     "instance": {
-                        "instance-id": "id-1",
+                        "id": "id-1",
                         "private-ip": "ip-1",
                         "hostname": "hostname",
                         "launch-time": "2020-01-01 00:00:00",
@@ -2445,7 +2478,7 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
                 {
                     "node": {"name": "node-id-2"},
                     "instance": {
-                        "instance-id": "id-2",
+                        "id": "id-2",
                         "private-ip": "ip-4",
                         "hostname": "hostname",
                         "launch-time": "2020-01-01 00:00:00",
@@ -2454,7 +2487,7 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
                 {
                     "node": {"name": "node-id-5"},
                     "instance": {
-                        "instance-id": "id-5",
+                        "id": "id-5",
                         "private-ip": "ip-5",
                         "hostname": "hostname",
                         "launch-time": "some_launch_time",
@@ -2463,7 +2496,7 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
                 {
                     "node": {"name": "node-id-6"},
                     "instance": {
-                        "instance-id": "id-6",
+                        "id": "id-6",
                         "private-ip": "ip-6",
                         "hostname": "hostname",
                         "launch-time": "some_launch_time",
@@ -2485,3 +2518,5 @@ def test_publish_node_launch_events(test_instances, failed_nodes, expected_detai
 
     # Assert calls
     assert_that(received_events).is_length(len(expected_details))
+    for received_event, expected_detail in zip(received_events, expected_details):
+        assert_that(received_event).is_equal_to(expected_detail)
