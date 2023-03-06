@@ -198,5 +198,5 @@ def event_publisher(event_logger, cluster_name, node_role, component, instance_i
     return emit_event
 
 
-def metric_publisher_noop(*args, **kwargs):
+def event_publisher_noop(*args, **kwargs):
     pass

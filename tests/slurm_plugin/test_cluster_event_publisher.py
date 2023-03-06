@@ -5,7 +5,7 @@ import pytest
 from assertpy import assert_that
 from slurm_plugin.cluster_event_publisher import ClusterEventPublisher
 from slurm_plugin.fleet_manager import EC2Instance
-from slurm_plugin.slurm_resources import DynamicNode
+from slurm_plugin.slurm_resources import DynamicNode, StaticNode
 
 
 def event_handler(received_events: List[Dict]):
@@ -1204,15 +1204,15 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
     [
         (
             [
-                DynamicNode(
+                StaticNode(
                     "queue1-dy-c5xlarge-2", "ip-2", "hostname", "IDLE+CLOUD+POWERING_DOWN", "queue1"
                 ),  # powering_down
-                DynamicNode("queue-dy-c5xlarge-1", "ip-3", "hostname", "IDLE+CLOUD", "queue"),
-                DynamicNode(
+                StaticNode("queue-dy-c5xlarge-1", "ip-3", "hostname", "IDLE+CLOUD", "queue"),
+                StaticNode(
                     "queue1-dy-c5xlarge-1", "ip-1", "hostname", "MIXED+CLOUD+NOT_RESPONDING+POWERING_UP", "queue1"
                 ),  # bootstrap failure dynamic
-                DynamicNode("queue1-dy-c4xlarge-1", "ip-1", "hostname", "DOWN", "queue1"),
-                DynamicNode(
+                StaticNode("queue1-dy-c4xlarge-1", "ip-1", "hostname", "DOWN", "queue1"),
+                StaticNode(
                     "queue1-dy-c5xlarge-3",
                     "nodeip",
                     "nodehostname",
@@ -1220,7 +1220,7 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                     "queue1",
                     "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes [root@2023-01-31T21:24:55]",
                 ),
-                DynamicNode(
+                StaticNode(
                     "queue2-dy-c5large-1",
                     "nodeip",
                     "nodehostname",
@@ -1228,7 +1228,7 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                     "queue2",
                     "(Code:InsufficientHostCapacity)Failure when resuming nodes [root@2023-01-31T21:24:55]",
                 ),
-                DynamicNode(
+                StaticNode(
                     "queue2-dy-c5large-2",
                     "nodeip",
                     "nodehostname",
@@ -1237,10 +1237,64 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                     "(Code:InsufficientHostCapacity)Temporarily disabling node due to insufficient capacity "
                     "[root@2023-01-31T21:24:55]",
                 ),
+                StaticNode(
+                    "queue2-dy-c5large-3",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:UnauthorizedOperation)Temporarily disabling node due to insufficient capacity "
+                    "[root@2023-01-31T21:24:55]",
+                ),
+                StaticNode(
+                    "queue2-dy-c5large-4",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:InvalidBlockDeviceMapping)Temporarily disabling node due to insufficient capacity "
+                    "[root@2023-01-31T21:24:55]",
+                ),
+                StaticNode(
+                    "queue2-dy-c5large-5",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:AccessDeniedException)Temporarily disabling node due to insufficient capacity "
+                    "[root@2023-01-31T21:24:55]",
+                ),
+                StaticNode(
+                    "queue2-dy-c5large-6",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:VcpuLimitExceeded)Temporarily disabling node due to insufficient capacity "
+                    "[root@2023-01-31T21:24:55]",
+                ),
+                StaticNode(
+                    "queue2-dy-c5large-8",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:VolumeLimitExceeded)Temporarily disabling node due to insufficient capacity "
+                    "[root@2023-01-31T21:24:55]",
+                ),
+                StaticNode(
+                    "queue2-dy-c5large-8",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:InsufficientVolumeCapacity)Temporarily disabling node due to insufficient capacity "
+                    "[root@2023-01-31T21:24:55]",
+                ),
             ],
             [
                 {
-                    "count": 7,
+                    "count": 13,
                     "nodes": [
                         {"name": "queue1-dy-c5xlarge-2"},
                         {"name": "queue-dy-c5xlarge-1"},
@@ -1249,6 +1303,12 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         {"name": "queue1-dy-c5xlarge-3"},
                         {"name": "queue2-dy-c5large-1"},
                         {"name": "queue2-dy-c5large-2"},
+                        {"name": "queue2-dy-c5large-3"},
+                        {"name": "queue2-dy-c5large-4"},
+                        {"name": "queue2-dy-c5large-5"},
+                        {"name": "queue2-dy-c5large-6"},
+                        {"name": "queue2-dy-c5large-8"},
+                        {"name": "queue2-dy-c5large-8"},
                     ],
                 },
                 {
@@ -1402,9 +1462,157 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                     }
                 },
                 {
-                    "error-code": "InsufficientReservedInstanceCapacity",
-                    "count": 1,
-                    "nodes": [{"name": "queue1-dy-c5xlarge-3"}],
+                    "node": {
+                        "name": "queue2-dy-c5large-3",
+                        "address": "nodeip",
+                        "hostname": "nodehostname",
+                        "state-string": "DOWN+CLOUD",
+                        "state": "DOWN",
+                        "state-flags": ["CLOUD"],
+                        "partitions": ["queue2"],
+                        "queue-name": "queue2",
+                        "compute-resource": "c5large",
+                        "node-type": "dy",
+                        "instance": "None",
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": False,
+                        "error-code": "UnauthorizedOperation",
+                        "reason": "(Code:UnauthorizedOperation)Temporarily disabling node due to insufficient capacity "
+                        "[root@2023-01-31T21:24:55]",
+                    }
+                },
+                {
+                    "node": {
+                        "name": "queue2-dy-c5large-4",
+                        "address": "nodeip",
+                        "hostname": "nodehostname",
+                        "state-string": "DOWN+CLOUD",
+                        "state": "DOWN",
+                        "state-flags": ["CLOUD"],
+                        "partitions": ["queue2"],
+                        "queue-name": "queue2",
+                        "compute-resource": "c5large",
+                        "node-type": "dy",
+                        "instance": "None",
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": False,
+                        "error-code": "InvalidBlockDeviceMapping",
+                        "reason": "(Code:InvalidBlockDeviceMapping)Temporarily disabling node due to insufficient "
+                        "capacity [root@2023-01-31T21:24:55]",
+                    }
+                },
+                {
+                    "node": {
+                        "name": "queue2-dy-c5large-5",
+                        "address": "nodeip",
+                        "hostname": "nodehostname",
+                        "state-string": "DOWN+CLOUD",
+                        "state": "DOWN",
+                        "state-flags": ["CLOUD"],
+                        "partitions": ["queue2"],
+                        "queue-name": "queue2",
+                        "compute-resource": "c5large",
+                        "node-type": "dy",
+                        "instance": "None",
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": False,
+                        "error-code": "AccessDeniedException",
+                        "reason": "(Code:AccessDeniedException)Temporarily disabling node due to insufficient capacity "
+                        "[root@2023-01-31T21:24:55]",
+                    }
+                },
+                {
+                    "node": {
+                        "name": "queue2-dy-c5large-6",
+                        "address": "nodeip",
+                        "hostname": "nodehostname",
+                        "state-string": "DOWN+CLOUD",
+                        "state": "DOWN",
+                        "state-flags": ["CLOUD"],
+                        "partitions": ["queue2"],
+                        "queue-name": "queue2",
+                        "compute-resource": "c5large",
+                        "node-type": "dy",
+                        "instance": "None",
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": False,
+                        "error-code": "VcpuLimitExceeded",
+                        "reason": "(Code:VcpuLimitExceeded)Temporarily disabling node due to insufficient capacity "
+                        "[root@2023-01-31T21:24:55]",
+                    }
+                },
+                {
+                    "node": {
+                        "name": "queue2-dy-c5large-8",
+                        "address": "nodeip",
+                        "hostname": "nodehostname",
+                        "state-string": "DOWN+CLOUD",
+                        "state": "DOWN",
+                        "state-flags": ["CLOUD"],
+                        "partitions": ["queue2"],
+                        "queue-name": "queue2",
+                        "compute-resource": "c5large",
+                        "node-type": "dy",
+                        "instance": "None",
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": False,
+                        "error-code": "VolumeLimitExceeded",
+                        "reason": "(Code:VolumeLimitExceeded)Temporarily disabling node due to insufficient capacity "
+                        "[root@2023-01-31T21:24:55]",
+                    }
+                },
+                {
+                    "node": {
+                        "name": "queue2-dy-c5large-8",
+                        "address": "nodeip",
+                        "hostname": "nodehostname",
+                        "state-string": "DOWN+CLOUD",
+                        "state": "DOWN",
+                        "state-flags": ["CLOUD"],
+                        "partitions": ["queue2"],
+                        "queue-name": "queue2",
+                        "compute-resource": "c5large",
+                        "node-type": "dy",
+                        "instance": "None",
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": False,
+                        "error-code": "InsufficientVolumeCapacity",
+                        "reason": "(Code:InsufficientVolumeCapacity)Temporarily disabling node due to insufficient "
+                        "capacity [root@2023-01-31T21:24:55]",
+                    }
+                },
+                {
+                    "other-failures": {"count": 0},
+                    "ice-failures": {
+                        "count": 3,
+                        "InsufficientReservedInstanceCapacity": ["queue1-dy-c5xlarge-3"],
+                        "InsufficientHostCapacity": ["queue2-dy-c5large-1", "queue2-dy-c5large-2"],
+                    },
+                    "vcpu-limit-failures": {"count": 1, "VcpuLimitExceeded": ["queue2-dy-c5large-6"]},
+                    "volume-limit-failures": {
+                        "count": 2,
+                        "VolumeLimitExceeded": ["queue2-dy-c5large-8"],
+                        "InsufficientVolumeCapacity": ["queue2-dy-c5large-8"],
+                    },
+                    "custom-ami-errors": {"count": 1, "InvalidBlockDeviceMapping": ["queue2-dy-c5large-4"]},
+                    "iam-policy-errors": {
+                        "count": 2,
+                        "UnauthorizedOperation": ["queue2-dy-c5large-3"],
+                        "AccessDeniedException": ["queue2-dy-c5large-5"],
+                    },
+                    "total": 9,
                 },
                 {
                     "node": {
@@ -1428,11 +1636,7 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "[root@2023-01-31T21:24:55]",
                     },
                     "error-code": "InsufficientReservedInstanceCapacity",
-                },
-                {
-                    "error-code": "InsufficientHostCapacity",
-                    "count": 2,
-                    "nodes": [{"name": "queue2-dy-c5large-1"}, {"name": "queue2-dy-c5large-2"}],
+                    "failure-type": "ice-failures",
                 },
                 {
                     "node": {
@@ -1456,6 +1660,7 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "[root@2023-01-31T21:24:55]",
                     },
                     "error-code": "InsufficientHostCapacity",
+                    "failure-type": "ice-failures",
                 },
                 {
                     "node": {
@@ -1479,6 +1684,199 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "capacity [root@2023-01-31T21:24:55]",
                     },
                     "error-code": "InsufficientHostCapacity",
+                    "failure-type": "ice-failures",
+                },
+                {
+                    "node": {
+                        "name": "queue2-dy-c5large-3",
+                        "address": "nodeip",
+                        "hostname": "nodehostname",
+                        "state-string": "DOWN+CLOUD",
+                        "state": "DOWN",
+                        "state-flags": ["CLOUD"],
+                        "partitions": ["queue2"],
+                        "queue-name": "queue2",
+                        "compute-resource": "c5large",
+                        "node-type": "dy",
+                        "instance": "None",
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": False,
+                        "error-code": "UnauthorizedOperation",
+                        "reason": "(Code:UnauthorizedOperation)Temporarily disabling node due to insufficient capacity "
+                        "[root@2023-01-31T21:24:55]",
+                    },
+                    "error-code": "UnauthorizedOperation",
+                    "failure-type": "iam-policy-errors",
+                },
+                {
+                    "node": {
+                        "name": "queue2-dy-c5large-4",
+                        "address": "nodeip",
+                        "hostname": "nodehostname",
+                        "state-string": "DOWN+CLOUD",
+                        "state": "DOWN",
+                        "state-flags": ["CLOUD"],
+                        "partitions": ["queue2"],
+                        "queue-name": "queue2",
+                        "compute-resource": "c5large",
+                        "node-type": "dy",
+                        "instance": "None",
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": False,
+                        "error-code": "InvalidBlockDeviceMapping",
+                        "reason": "(Code:InvalidBlockDeviceMapping)Temporarily disabling node due to insufficient "
+                        "capacity [root@2023-01-31T21:24:55]",
+                    },
+                    "error-code": "InvalidBlockDeviceMapping",
+                    "failure-type": "custom-ami-errors",
+                },
+                {
+                    "node": {
+                        "name": "queue2-dy-c5large-5",
+                        "address": "nodeip",
+                        "hostname": "nodehostname",
+                        "state-string": "DOWN+CLOUD",
+                        "state": "DOWN",
+                        "state-flags": ["CLOUD"],
+                        "partitions": ["queue2"],
+                        "queue-name": "queue2",
+                        "compute-resource": "c5large",
+                        "node-type": "dy",
+                        "instance": "None",
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": False,
+                        "error-code": "AccessDeniedException",
+                        "reason": "(Code:AccessDeniedException)Temporarily disabling node due to insufficient capacity "
+                        "[root@2023-01-31T21:24:55]",
+                    },
+                    "error-code": "AccessDeniedException",
+                    "failure-type": "iam-policy-errors",
+                },
+                {
+                    "node": {
+                        "name": "queue2-dy-c5large-6",
+                        "address": "nodeip",
+                        "hostname": "nodehostname",
+                        "state-string": "DOWN+CLOUD",
+                        "state": "DOWN",
+                        "state-flags": ["CLOUD"],
+                        "partitions": ["queue2"],
+                        "queue-name": "queue2",
+                        "compute-resource": "c5large",
+                        "node-type": "dy",
+                        "instance": "None",
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": False,
+                        "error-code": "VcpuLimitExceeded",
+                        "reason": "(Code:VcpuLimitExceeded)Temporarily disabling node due to insufficient capacity "
+                        "[root@2023-01-31T21:24:55]",
+                    },
+                    "error-code": "VcpuLimitExceeded",
+                    "failure-type": "vcpu-limit-failures",
+                },
+                {
+                    "node": {
+                        "name": "queue2-dy-c5large-8",
+                        "address": "nodeip",
+                        "hostname": "nodehostname",
+                        "state-string": "DOWN+CLOUD",
+                        "state": "DOWN",
+                        "state-flags": ["CLOUD"],
+                        "partitions": ["queue2"],
+                        "queue-name": "queue2",
+                        "compute-resource": "c5large",
+                        "node-type": "dy",
+                        "instance": "None",
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": False,
+                        "error-code": "VolumeLimitExceeded",
+                        "reason": "(Code:VolumeLimitExceeded)Temporarily disabling node due to insufficient capacity "
+                        "[root@2023-01-31T21:24:55]",
+                    },
+                    "error-code": "VolumeLimitExceeded",
+                    "failure-type": "volume-limit-failures",
+                },
+                {
+                    "node": {
+                        "name": "queue2-dy-c5large-8",
+                        "address": "nodeip",
+                        "hostname": "nodehostname",
+                        "state-string": "DOWN+CLOUD",
+                        "state": "DOWN",
+                        "state-flags": ["CLOUD"],
+                        "partitions": ["queue2"],
+                        "queue-name": "queue2",
+                        "compute-resource": "c5large",
+                        "node-type": "dy",
+                        "instance": "None",
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": False,
+                        "error-code": "InsufficientVolumeCapacity",
+                        "reason": "(Code:InsufficientVolumeCapacity)Temporarily disabling node due to insufficient "
+                        "capacity [root@2023-01-31T21:24:55]",
+                    },
+                    "error-code": "VolumeLimitExceeded",
+                    "failure-type": "volume-limit-failures",
+                },
+                {
+                    "node": {
+                        "name": "queue2-dy-c5large-8",
+                        "address": "nodeip",
+                        "hostname": "nodehostname",
+                        "state-string": "DOWN+CLOUD",
+                        "state": "DOWN",
+                        "state-flags": ["CLOUD"],
+                        "partitions": ["queue2"],
+                        "queue-name": "queue2",
+                        "compute-resource": "c5large",
+                        "node-type": "dy",
+                        "instance": "None",
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": False,
+                        "error-code": "VolumeLimitExceeded",
+                        "reason": "(Code:VolumeLimitExceeded)Temporarily disabling node due to insufficient capacity "
+                        "[root@2023-01-31T21:24:55]",
+                    },
+                    "error-code": "InsufficientVolumeCapacity",
+                    "failure-type": "volume-limit-failures",
+                },
+                {
+                    "node": {
+                        "name": "queue2-dy-c5large-8",
+                        "address": "nodeip",
+                        "hostname": "nodehostname",
+                        "state-string": "DOWN+CLOUD",
+                        "state": "DOWN",
+                        "state-flags": ["CLOUD"],
+                        "partitions": ["queue2"],
+                        "queue-name": "queue2",
+                        "compute-resource": "c5large",
+                        "node-type": "dy",
+                        "instance": "None",
+                        "slurmd-start-time": None,
+                        "up-time": 0,
+                        "idle-time": 0,
+                        "is-running-job": False,
+                        "error-code": "InsufficientVolumeCapacity",
+                        "reason": "(Code:InsufficientVolumeCapacity)Temporarily disabling node due to insufficient "
+                        "capacity [root@2023-01-31T21:24:55]",
+                    },
+                    "error-code": "InsufficientVolumeCapacity",
+                    "failure-type": "volume-limit-failures",
                 },
             ],
         ),
@@ -1568,6 +1966,7 @@ def test_publish_static_nodes_in_replacement(test_nodes, expected_details):
                 {
                     "partition": "queue1",
                     "resource": "c5xlarge",
+                    "failure-type": "ice-failures",
                     "error-code": "InsufficientReservedInstanceCapacity",
                     "node": {
                         "name": "queue1-dy-c5xlarge-3",
@@ -1593,6 +1992,7 @@ def test_publish_static_nodes_in_replacement(test_nodes, expected_details):
                 {
                     "partition": "queue2",
                     "resource": "c5large",
+                    "failure-type": "ice-failures",
                     "error-code": "InsufficientHostCapacity",
                     "node": {
                         "name": "queue2-dy-c5large-1",
@@ -1618,6 +2018,7 @@ def test_publish_static_nodes_in_replacement(test_nodes, expected_details):
                 {
                     "partition": "queue2",
                     "resource": "c5large",
+                    "failure-type": "ice-failures",
                     "error-code": "InsufficientHostCapacity",
                     "node": {
                         "name": "queue2-dy-c5large-2",
@@ -2333,6 +2734,30 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
                     "ice-f-1",
                     "ice-f-2",
                 ],
+                "VcpuLimitExceeded": [
+                    "vcpu-g-1",
+                ],
+                "VolumeLimitExceeded": [
+                    "vle-h-1",
+                    "vle-h-2",
+                ],
+                "InsufficientVolumeCapacity": [
+                    "ivc-i-1",
+                    "ivc-i-2",
+                    "ivc-i-3",
+                ],
+                "InvalidBlockDeviceMapping": [
+                    "ibdm-j-1",
+                    "ibdm-j-2",
+                    "ibdm-j-3",
+                ],
+                "UnauthorizedOperation": [
+                    "iam-k-1",
+                    "iam-k-2",
+                ],
+                "AccessDeniedException": [
+                    "iam-l-1",
+                ],
             },
             [
                 {
@@ -2391,49 +2816,149 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
                     },
                 },
                 {
-                    "total": 20,
-                    "ice-failures": {
-                        "count": 15,
-                        "errors": {
-                            "InsufficientInstanceCapacity": {"nodes": ["ice-a-1", "ice-a-2", "ice-a-3"], "count": 3},
-                            "InsufficientHostCapacity": {"nodes": ["ice-b-1", "ice-b-2"], "count": 2},
-                            "InsufficientReservedInstanceCapacity": {
-                                "nodes": ["ice-c-1", "ice-c-2", "ice-c-3"],
-                                "count": 3,
-                            },
-                            "MaxSpotInstanceCountExceeded": {"nodes": ["ice-d-1", "ice-d-2"], "count": 2},
-                            "Unsupported": {"nodes": ["ice-e-1", "ice-e-2", "ice-e-3"], "count": 3},
-                            "SpotMaxPriceTooLow": {"nodes": ["ice-f-1", "ice-f-2"], "count": 2},
-                        },
-                    },
                     "other-failures": {
                         "count": 5,
-                        "errors": {
-                            "Error1": {"nodes": ["node-a-1", "node-a-2", "node-a-3"], "count": 3},
-                            "Error2": {"nodes": ["node-b-1", "node-b-2"], "count": 2},
-                        },
+                        "Error1": ["node-a-1", "node-a-2", "node-a-3"],
+                        "Error2": ["node-b-1", "node-b-2"],
                     },
+                    "ice-failures": {
+                        "count": 15,
+                        "InsufficientInstanceCapacity": ["ice-a-1", "ice-a-2", "ice-a-3"],
+                        "InsufficientHostCapacity": ["ice-b-1", "ice-b-2"],
+                        "InsufficientReservedInstanceCapacity": ["ice-c-1", "ice-c-2", "ice-c-3"],
+                        "MaxSpotInstanceCountExceeded": ["ice-d-1", "ice-d-2"],
+                        "Unsupported": ["ice-e-1", "ice-e-2", "ice-e-3"],
+                        "SpotMaxPriceTooLow": ["ice-f-1", "ice-f-2"],
+                    },
+                    "vcpu-limit-failures": {"count": 1, "VcpuLimitExceeded": ["vcpu-g-1"]},
+                    "volume-limit-failures": {
+                        "count": 5,
+                        "VolumeLimitExceeded": ["vle-h-1", "vle-h-2"],
+                        "InsufficientVolumeCapacity": ["ivc-i-1", "ivc-i-2", "ivc-i-3"],
+                    },
+                    "custom-ami-errors": {
+                        "count": 3,
+                        "InvalidBlockDeviceMapping": ["ibdm-j-1", "ibdm-j-2", "ibdm-j-3"],
+                    },
+                    "iam-policy-errors": {
+                        "count": 3,
+                        "UnauthorizedOperation": ["iam-k-1", "iam-k-2"],
+                        "AccessDeniedException": ["iam-l-1"],
+                    },
+                    "total": 32,
                 },
-                {"error-code": "Error1", "node": {"name": "node-a-1"}},
-                {"error-code": "Error1", "node": {"name": "node-a-2"}},
-                {"error-code": "Error1", "node": {"name": "node-a-3"}},
-                {"error-code": "Error2", "node": {"name": "node-b-1"}},
-                {"error-code": "Error2", "node": {"name": "node-b-2"}},
-                {"error-code": "InsufficientInstanceCapacity", "node": {"name": "ice-a-1"}},
-                {"error-code": "InsufficientInstanceCapacity", "node": {"name": "ice-a-2"}},
-                {"error-code": "InsufficientInstanceCapacity", "node": {"name": "ice-a-3"}},
-                {"error-code": "InsufficientHostCapacity", "node": {"name": "ice-b-1"}},
-                {"error-code": "InsufficientHostCapacity", "node": {"name": "ice-b-2"}},
-                {"error-code": "InsufficientReservedInstanceCapacity", "node": {"name": "ice-c-1"}},
-                {"error-code": "InsufficientReservedInstanceCapacity", "node": {"name": "ice-c-2"}},
-                {"error-code": "InsufficientReservedInstanceCapacity", "node": {"name": "ice-c-3"}},
-                {"error-code": "MaxSpotInstanceCountExceeded", "node": {"name": "ice-d-1"}},
-                {"error-code": "MaxSpotInstanceCountExceeded", "node": {"name": "ice-d-2"}},
-                {"error-code": "Unsupported", "node": {"name": "ice-e-1"}},
-                {"error-code": "Unsupported", "node": {"name": "ice-e-2"}},
-                {"error-code": "Unsupported", "node": {"name": "ice-e-3"}},
-                {"error-code": "SpotMaxPriceTooLow", "node": {"name": "ice-f-1"}},
-                {"error-code": "SpotMaxPriceTooLow", "node": {"name": "ice-f-2"}},
+                {"error-code": "Error1", "failure-type": "other-failures", "node": {"name": "node-a-1"}},
+                {"error-code": "Error1", "failure-type": "other-failures", "node": {"name": "node-a-2"}},
+                {"error-code": "Error1", "failure-type": "other-failures", "node": {"name": "node-a-3"}},
+                {"error-code": "Error2", "failure-type": "other-failures", "node": {"name": "node-b-1"}},
+                {"error-code": "Error2", "failure-type": "other-failures", "node": {"name": "node-b-2"}},
+                {
+                    "error-code": "InsufficientInstanceCapacity",
+                    "failure-type": "ice-failures",
+                    "node": {"name": "ice-a-1"},
+                },
+                {
+                    "error-code": "InsufficientInstanceCapacity",
+                    "failure-type": "ice-failures",
+                    "node": {"name": "ice-a-2"},
+                },
+                {
+                    "error-code": "InsufficientInstanceCapacity",
+                    "failure-type": "ice-failures",
+                    "node": {"name": "ice-a-3"},
+                },
+                {"error-code": "InsufficientHostCapacity", "failure-type": "ice-failures", "node": {"name": "ice-b-1"}},
+                {"error-code": "InsufficientHostCapacity", "failure-type": "ice-failures", "node": {"name": "ice-b-2"}},
+                {
+                    "error-code": "InsufficientReservedInstanceCapacity",
+                    "failure-type": "ice-failures",
+                    "node": {"name": "ice-c-1"},
+                },
+                {
+                    "error-code": "InsufficientReservedInstanceCapacity",
+                    "failure-type": "ice-failures",
+                    "node": {"name": "ice-c-2"},
+                },
+                {
+                    "error-code": "InsufficientReservedInstanceCapacity",
+                    "failure-type": "ice-failures",
+                    "node": {"name": "ice-c-3"},
+                },
+                {
+                    "error-code": "MaxSpotInstanceCountExceeded",
+                    "failure-type": "ice-failures",
+                    "node": {"name": "ice-d-1"},
+                },
+                {
+                    "error-code": "MaxSpotInstanceCountExceeded",
+                    "failure-type": "ice-failures",
+                    "node": {"name": "ice-d-2"},
+                },
+                {"error-code": "Unsupported", "failure-type": "ice-failures", "node": {"name": "ice-e-1"}},
+                {"error-code": "Unsupported", "failure-type": "ice-failures", "node": {"name": "ice-e-2"}},
+                {"error-code": "Unsupported", "failure-type": "ice-failures", "node": {"name": "ice-e-3"}},
+                {"error-code": "SpotMaxPriceTooLow", "failure-type": "ice-failures", "node": {"name": "ice-f-1"}},
+                {"error-code": "SpotMaxPriceTooLow", "failure-type": "ice-failures", "node": {"name": "ice-f-2"}},
+                {
+                    "error-code": "VcpuLimitExceeded",
+                    "failure-type": "vcpu-limit-failures",
+                    "node": {"name": "vcpu-g-1"},
+                },
+                {
+                    "error-code": "VolumeLimitExceeded",
+                    "failure-type": "volume-limit-failures",
+                    "node": {"name": "vle-h-1"},
+                },
+                {
+                    "error-code": "VolumeLimitExceeded",
+                    "failure-type": "volume-limit-failures",
+                    "node": {"name": "vle-h-2"},
+                },
+                {
+                    "error-code": "InsufficientVolumeCapacity",
+                    "failure-type": "volume-limit-failures",
+                    "node": {"name": "ivc-i-1"},
+                },
+                {
+                    "error-code": "InsufficientVolumeCapacity",
+                    "failure-type": "volume-limit-failures",
+                    "node": {"name": "ivc-i-2"},
+                },
+                {
+                    "error-code": "InsufficientVolumeCapacity",
+                    "failure-type": "volume-limit-failures",
+                    "node": {"name": "ivc-i-3"},
+                },
+                {
+                    "error-code": "InvalidBlockDeviceMapping",
+                    "failure-type": "custom-ami-errors",
+                    "node": {"name": "ibdm-j-1"},
+                },
+                {
+                    "error-code": "InvalidBlockDeviceMapping",
+                    "failure-type": "custom-ami-errors",
+                    "node": {"name": "ibdm-j-2"},
+                },
+                {
+                    "error-code": "InvalidBlockDeviceMapping",
+                    "failure-type": "custom-ami-errors",
+                    "node": {"name": "ibdm-j-3"},
+                },
+                {
+                    "error-code": "UnauthorizedOperation",
+                    "failure-type": "iam-policy-errors",
+                    "node": {"name": "iam-k-1"},
+                },
+                {
+                    "error-code": "UnauthorizedOperation",
+                    "failure-type": "iam-policy-errors",
+                    "node": {"name": "iam-k-2"},
+                },
+                {
+                    "error-code": "AccessDeniedException",
+                    "failure-type": "iam-policy-errors",
+                    "node": {"name": "iam-l-1"},
+                },
             ],
         ),
         (
@@ -2502,7 +3027,15 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
                         "launch-time": "some_launch_time",
                     },
                 },
-                {"total": 0, "ice-failures": {"count": 0}, "other-failures": {"count": 0}},
+                {
+                    "other-failures": {"count": 0},
+                    "ice-failures": {"count": 0},
+                    "vcpu-limit-failures": {"count": 0},
+                    "volume-limit-failures": {"count": 0},
+                    "custom-ami-errors": {"count": 0},
+                    "iam-policy-errors": {"count": 0},
+                    "total": 0,
+                },
             ],
         ),
     ],

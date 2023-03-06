@@ -22,14 +22,14 @@ from typing import Callable
 from botocore.config import Config
 from common.schedulers.slurm_commands import resume_powering_down_nodes, update_all_partitions
 from slurm_plugin.clustermgtd import ComputeFleetStatus, ComputeFleetStatusManager
-from slurm_plugin.common import event_publisher, log_exception, metric_publisher_noop
+from slurm_plugin.common import event_publisher, event_publisher_noop, log_exception
 from slurm_plugin.instance_manager import InstanceManager
 from slurm_plugin.slurm_resources import CONFIG_FILE_DIR, PartitionStatus
 
 log = logging.getLogger(__name__)
-metrics_logger = log.getChild("metrics")
+metrics_logger = log.getChild("events")
 
-_publish_event: Callable = metric_publisher_noop
+_publish_event: Callable = event_publisher_noop
 
 
 class SlurmFleetManagerConfig:

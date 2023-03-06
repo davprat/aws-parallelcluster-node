@@ -21,14 +21,14 @@ from botocore.config import Config
 from common.schedulers.slurm_commands import get_nodes_info, set_nodes_down
 from common.utils import read_json
 from slurm_plugin.cluster_event_publisher import ClusterEventPublisher
-from slurm_plugin.common import event_publisher, is_clustermgtd_heartbeat_valid, metric_publisher_noop, print_with_count
+from slurm_plugin.common import event_publisher, event_publisher_noop, is_clustermgtd_heartbeat_valid, print_with_count
 from slurm_plugin.instance_manager import InstanceManager
 from slurm_plugin.slurm_resources import CONFIG_FILE_DIR
 
 log = logging.getLogger(__name__)
-metrics_logger = log.getChild("metrics")
+event_logger = log.getChild("events")
 
-_event_publisher: ClusterEventPublisher = ClusterEventPublisher(metric_publisher_noop)
+_event_publisher: ClusterEventPublisher = ClusterEventPublisher(event_publisher_noop)
 
 
 class SlurmResumeConfig:
@@ -240,7 +240,7 @@ def main():
         global _event_publisher
         _event_publisher = ClusterEventPublisher(
             event_publisher(
-                metrics_logger,
+                event_logger,
                 resume_config.cluster_name,
                 "HeadNode",
                 "slurm-resume",

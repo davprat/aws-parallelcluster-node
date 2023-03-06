@@ -31,10 +31,10 @@ from retrying import retry
 from slurm_plugin.common import (
     DEFAULT_COMMAND_TIMEOUT,
     event_publisher,
+    event_publisher_noop,
     expired_clustermgtd_heartbeat,
     get_clustermgtd_heartbeat,
     log_exception,
-    metric_publisher_noop,
 )
 from slurm_plugin.slurm_resources import CONFIG_FILE_DIR, SlurmNode
 
@@ -44,10 +44,10 @@ RELOAD_CONFIG_ITERATIONS = 10
 SLURM_PLUGIN_DIR = "/opt/slurm/etc/pcluster/.slurm_plugin"
 COMPUTEMGTD_CONFIG_PATH = f"{SLURM_PLUGIN_DIR}/parallelcluster_computemgtd.conf"
 log = logging.getLogger(__name__)
-event_logger = log.getChild("metrics")
+event_logger = log.getChild("events")
 
 
-_publish_event: Callable = metric_publisher_noop
+_publish_event: Callable = event_publisher_noop
 
 
 class ComputemgtdConfig:
@@ -160,7 +160,7 @@ def _self_terminate():
     _publish_event(
         "INFO",
         "Self terminating instance",
-        "node-self-terminate",
+        event_type="node-self-terminate",
     )
     time.sleep(10)
     log.info("Self terminating instance now!")
@@ -184,16 +184,22 @@ def _is_self_node_down(self_nodename):
     try:
         self_node = _get_nodes_info_with_retry(self_nodename)[0]
         log.info("Current self node state %s", self_node.__repr__())
-        _publish_event("INFO", "Current node state", "node_state", detail={"node": self_node.description()})
         if self_node.is_down() or self_node.is_power():
             log.warning("Node is incorrectly attached to scheduler, preparing for self termination...")
             _publish_event(
                 "WARNING",
                 "Node is incorrectly attached to scheduler",
-                "node-state-not-attached",
+                event_type="node-state-not-attached",
+                detail={"node": self_node.description()},
             )
             return True
         log.info("Node is correctly attached to scheduler, not terminating...")
+        _publish_event(
+            "INFO",
+            "Node is correctly attached to scheduler",
+            event_type="node-state-attached",
+            detail={"node": self_node.description()},
+        )
         return False
     except Exception as e:
         # This could happen is slurmctld is down completely
@@ -201,7 +207,7 @@ def _is_self_node_down(self_nodename):
         _publish_event(
             "ERROR",
             "Unable to retrieve current node state from slurm",
-            "node-state-exception",
+            event_type="node-state-exception",
             detail={
                 "exception": repr(e),
             },
@@ -265,7 +271,7 @@ def _run_computemgtd(config_file):
     _publish_event(
         "INFO",
         "Initializing clustermgtd heartbeat",
-        "computemgtd-init",
+        event_type="init",
         detail={
             "heartbeat": str(last_heartbeat),
         },
@@ -285,7 +291,7 @@ def _run_computemgtd(config_file):
                 _publish_event(
                     "WARNING",
                     "Unable to reload daemon config, using previous one.",
-                    "configuration-failure-exception",
+                    event_type="configuration-failure-exception",
                     detail={
                         "exception": repr(e),
                     },
@@ -300,7 +306,7 @@ def _run_computemgtd(config_file):
             _publish_event(
                 "INFO",
                 "Last heartbeat from clustermgtd",
-                "heartbeat",
+                event_type="heartbeat",
                 detail={
                     "last-heartbeat": last_heartbeat.isoformat() if last_heartbeat else None,
                 },
@@ -314,9 +320,9 @@ def _run_computemgtd(config_file):
             _publish_event(
                 "WARNING",
                 "Unable to retrieve clustermgtd heartbeat. Using last known heartbeat",
-                "heartbeat-failure-exception",
+                event_type="heartbeat-failure-exception",
                 detail={
-                    "last-heartbeat-exception": last_heartbeat.isoformat() if last_heartbeat else None,
+                    "last-heartbeat": last_heartbeat.isoformat() if last_heartbeat else None,
                     "exception": repr(e),
                 },
             )

@@ -16,15 +16,15 @@ import os
 from configparser import ConfigParser
 from datetime import datetime, timezone
 from logging.config import fileConfig
-from typing import Callable
 
-from slurm_plugin.common import event_publisher, is_clustermgtd_heartbeat_valid, metric_publisher_noop
+from slurm_plugin.cluster_event_publisher import ClusterEventPublisher
+from slurm_plugin.common import event_publisher, event_publisher_noop, is_clustermgtd_heartbeat_valid
 from slurm_plugin.slurm_resources import CONFIG_FILE_DIR
 
 log = logging.getLogger(__name__)
-metrics_logger = log.getChild("metrics")
+event_logger = log.getChild("events")
 
-_publish_event: Callable = metric_publisher_noop
+_event_publisher: ClusterEventPublisher = ClusterEventPublisher(event_publisher_noop)
 
 
 class SlurmSuspendConfig:
@@ -79,9 +79,11 @@ def main():
             e,
         )
 
-    global _publish_event
-    _publish_event = event_publisher(
-        metrics_logger, suspend_config.cluster_name, "HeadNode", "slurm-suspend", suspend_config.head_node_instance_id
+    global _event_publisher
+    _event_publisher = ClusterEventPublisher(
+        event_publisher(
+            event_logger, suspend_config.cluster_name, "HeadNode", "slurm-suspend", suspend_config.head_node_instance_id
+        )
     )
 
     log.info("Suspending following nodes. Clustermgtd will cleanup orphaned instances: %s", args.nodes)
@@ -95,10 +97,10 @@ def main():
         "The backing EC2 instances may not be correctly terminated.\n"
         "Please check and terminate any orphaned instances in EC2!"
         log.error(error_message)
-        _publish_event("ERROR", error_message, "suspend-error", detail={"nodes": args.nodes})
+        event_publisher.publish_suspend_error_events(error_message=error_message, slurm_node_spec=args.nodes)
     else:
         log.info("SuspendProgram finished. Nodes will be available after SuspendTimeout")
-        _publish_event("INFO", "Node Suspended", "suspend-node", detail={"nodes": args.nodes})
+        event_publisher.publish_suspend_events(slurm_node_spec=args.nodes)
 
 
 if __name__ == "__main__":

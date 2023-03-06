@@ -60,7 +60,7 @@ CONSOLE_OUTPUT_WAIT_TIME = 5 * 60
 MAXIMUM_TASK_BACKLOG = 100
 log = logging.getLogger(__name__)
 compute_logger = log.getChild("console_output")
-event_logger = log.getChild("metrics")
+event_logger = log.getChild("events")
 
 
 class ComputeFleetStatus(Enum):

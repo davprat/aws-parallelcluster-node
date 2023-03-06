@@ -1018,12 +1018,17 @@ def test_handle_powering_down_nodes(
             1,
             [
                 r"Failed to launch instances due to limited EC2 capacity for following nodes: .*",
-                r'{"datetime": ".*", "version": 0, "cluster-name": "hit-test", '
-                r'"node-role": "HeadNode", "component": "clustermgtd", "level": "WARNING", '
-                r'"instance-id": "i-instance-id", "event-type": "static-nodes-in-replacement-failure-count", '
-                r'"message": ".*", '
-                r'"detail": {"error-code": "LimitedInstanceCapacity", "count": 1, '
-                r'"nodes": \[{"name": "queue1-st-c5xlarge-3"}\]}}',
+                r'{"datetime": ".*", "version": 0, "cluster-name": "hit-test", "node-role": "HeadNode", '
+                r'"component": "clustermgtd", "level": "WARNING", "instance-id": "i-instance-id", '
+                r'"event-type": "node-launch-failure-count", "message": ".*", '
+                r'"detail": {'
+                r'"other-failures": {"count": 1, "LimitedInstanceCapacity": \["queue1-st-c5xlarge-3"\]}, '
+                r'"ice-failures": {"count": 0}, '
+                r'"vcpu-limit-failures": {"count": 0}, '
+                r'"volume-limit-failures": {"count": 0}, '
+                r'"custom-ami-errors": {"count": 0}, '
+                r'"iam-policy-errors": {"count": 0}, '
+                r'"total": 1}}',
             ],
         ),
         (
