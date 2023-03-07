@@ -357,7 +357,7 @@ def test_publish_unhealthy_dynamic_node_events(test_nodes, expected_details, lev
 
 
 @pytest.mark.parametrize(
-    "test_nodes, expected_details, level_filter",
+    "test_nodes, expected_details, level_filter, max_list_size",
     [
         (
             [
@@ -432,7 +432,7 @@ def test_publish_unhealthy_dynamic_node_events(test_nodes, expected_details, lev
                     "(Code:VolumeLimitExceeded)Error",
                 ),
                 StaticNode(
-                    "queue2-dy-c5large-8",
+                    "queue2-dy-c5large-9",
                     "nodeip",
                     "nodehostname",
                     "DOWN+CLOUD",
@@ -457,12 +457,12 @@ def test_publish_unhealthy_dynamic_node_events(test_nodes, expected_details, lev
                             {"name": "queue2-dy-c5large-5"},
                             {"name": "queue2-dy-c5large-6"},
                             {"name": "queue2-dy-c5large-8"},
-                            {"name": "queue2-dy-c5large-8"},
+                            {"name": "queue2-dy-c5large-9"},
                         ],
                     }
                 },
                 {
-                    "static-node-failure-instance-terminate-count": {
+                    "static-node-instance-terminate-count": {
                         "count": 13,
                         "nodes": [
                             {
@@ -550,7 +550,7 @@ def test_publish_unhealthy_dynamic_node_events(test_nodes, expected_details, lev
                                 "reason": "(Code:VolumeLimitExceeded)Error",
                             },
                             {
-                                "name": "queue2-dy-c5large-8",
+                                "name": "queue2-dy-c5large-9",
                                 "id": "i-id-12",
                                 "ip": "1.2.3.12",
                                 "error-code": "InsufficientVolumeCapacity",
@@ -586,7 +586,7 @@ def test_publish_unhealthy_dynamic_node_events(test_nodes, expected_details, lev
                             {"name": "queue2-dy-c5large-5"},
                             {"name": "queue2-dy-c5large-6"},
                             {"name": "queue2-dy-c5large-8"},
-                            {"name": "queue2-dy-c5large-8"},
+                            {"name": "queue2-dy-c5large-9"},
                         ],
                     }
                 },
@@ -602,7 +602,7 @@ def test_publish_unhealthy_dynamic_node_events(test_nodes, expected_details, lev
                         "volume-limit-failures": {
                             "count": 2,
                             "VolumeLimitExceeded": ["queue2-dy-c5large-8"],
-                            "InsufficientVolumeCapacity": ["queue2-dy-c5large-8"],
+                            "InsufficientVolumeCapacity": ["queue2-dy-c5large-9"],
                         },
                         "custom-ami-errors": {"count": 1, "InvalidBlockDeviceMapping": ["queue2-dy-c5large-4"]},
                         "iam-policy-errors": {
@@ -615,12 +615,197 @@ def test_publish_unhealthy_dynamic_node_events(test_nodes, expected_details, lev
                 },
             ],
             ["ERROR", "WARNING", "INFO"],
+            None,
+        ),
+        (
+            [
+                StaticNode("queue1-dy-c5xlarge-2", "ip-2", "hostname", "IDLE+CLOUD+POWERING_DOWN", "queue1"),
+                StaticNode("queue-dy-c5xlarge-1", "ip-3", "hostname", "IDLE+CLOUD", "queue"),
+                StaticNode(
+                    "queue1-dy-c5xlarge-1", "ip-1", "hostname", "MIXED+CLOUD+NOT_RESPONDING+POWERING_UP", "queue1"
+                ),
+                StaticNode("queue1-dy-c4xlarge-1", "ip-1", "hostname", "DOWN", "queue1"),
+                StaticNode(
+                    "queue1-dy-c5xlarge-3",
+                    "nodeip",
+                    "nodehostname",
+                    "COMPLETING+DRAIN",
+                    "queue1",
+                    "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes",
+                ),
+                StaticNode(
+                    "queue2-dy-c5large-1",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:InsufficientHostCapacity)Failure when resuming nodes",
+                ),
+                StaticNode(
+                    "queue2-dy-c5large-2",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:InsufficientHostCapacity)Error",
+                ),
+                StaticNode(
+                    "queue2-dy-c5large-10",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:InsufficientHostCapacity)Failure when resuming nodes",
+                ),
+                StaticNode(
+                    "queue2-dy-c5large-11",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:InsufficientHostCapacity)Failure when resuming nodes",
+                ),
+                StaticNode(
+                    "queue2-dy-c5large-12",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:InsufficientHostCapacity)Failure when resuming nodes",
+                ),
+                StaticNode(
+                    "queue2-dy-c5large-3",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:UnauthorizedOperation)Error",
+                ),
+                StaticNode(
+                    "queue2-dy-c5large-4",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:InvalidBlockDeviceMapping)Error",
+                ),
+                StaticNode(
+                    "queue2-dy-c5large-5",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:AccessDeniedException)Error",
+                ),
+                StaticNode(
+                    "queue2-dy-c5large-6",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:VcpuLimitExceeded)Error",
+                ),
+                StaticNode(
+                    "queue2-dy-c5large-8",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:VolumeLimitExceeded)Error",
+                ),
+                StaticNode(
+                    "queue2-dy-c5large-9",
+                    "nodeip",
+                    "nodehostname",
+                    "DOWN+CLOUD",
+                    "queue2",
+                    "(Code:InsufficientVolumeCapacity)Error",
+                ),
+            ],
+            [
+                {
+                    "static-node-health-check-failure-count": {
+                        "count": 16,
+                        "nodes": [{"name": "queue1-dy-c5xlarge-2"}, {"name": "queue-dy-c5xlarge-1"}],
+                    }
+                },
+                {
+                    "static-node-instance-terminate-count": {
+                        "count": 16,
+                        "nodes": [
+                            {
+                                "name": "queue1-dy-c5xlarge-2",
+                                "id": "i-id-0",
+                                "ip": "1.2.3.0",
+                                "error-code": None,
+                                "reason": None,
+                            },
+                            {
+                                "name": "queue-dy-c5xlarge-1",
+                                "id": "i-id-1",
+                                "ip": "1.2.3.1",
+                                "error-code": None,
+                                "reason": None,
+                            },
+                        ],
+                    }
+                },
+                {
+                    "successful-node-launch-count": {
+                        "count": 4,
+                        "nodes": [
+                            {"name": "queue1-dy-c5xlarge-2", "id": "i-id-0", "ip": "1.2.3.0"},
+                            {"name": "queue-dy-c5xlarge-1", "id": "i-id-1", "ip": "1.2.3.1"},
+                        ],
+                    }
+                },
+                {
+                    "static-nodes-in-replacement-count": {
+                        "count": 16,
+                        "nodes": [{"name": "queue1-dy-c5xlarge-2"}, {"name": "queue-dy-c5xlarge-1"}],
+                    }
+                },
+                {
+                    "node-launch-failure-count": {
+                        "other-failures": {"count": 0},
+                        "ice-failures": {
+                            "count": 6,
+                            "InsufficientReservedInstanceCapacity": ["queue1-dy-c5xlarge-3"],
+                            "InsufficientHostCapacity": ["queue2-dy-c5large-1", "queue2-dy-c5large-2"],
+                        },
+                        "vcpu-limit-failures": {"count": 1, "VcpuLimitExceeded": ["queue2-dy-c5large-6"]},
+                        "volume-limit-failures": {
+                            "count": 2,
+                            "VolumeLimitExceeded": ["queue2-dy-c5large-8"],
+                            "InsufficientVolumeCapacity": ["queue2-dy-c5large-9"],
+                        },
+                        "custom-ami-errors": {"count": 1, "InvalidBlockDeviceMapping": ["queue2-dy-c5large-4"]},
+                        "iam-policy-errors": {
+                            "count": 2,
+                            "UnauthorizedOperation": ["queue2-dy-c5large-3"],
+                            "AccessDeniedException": ["queue2-dy-c5large-5"],
+                        },
+                        "total": 12,
+                    }
+                },
+            ],
+            ["ERROR", "WARNING", "INFO"],
+            2,
         ),
     ],
+    ids=[
+        "default list limit",
+        "list limit of 2",
+    ],
 )
-def test_publish_unhealthy_static_node_events(test_nodes, expected_details, level_filter):
+def test_publish_unhealthy_static_node_events(test_nodes, expected_details, level_filter, max_list_size):
     received_events = []
-    event_publisher = ClusterEventPublisher(event_handler(received_events, level_filter=level_filter))
+    if max_list_size:
+        event_publisher = ClusterEventPublisher(
+            event_handler(received_events, level_filter=level_filter), max_list_size=max_list_size
+        )
+    else:
+        event_publisher = ClusterEventPublisher(event_handler(received_events, level_filter=level_filter))
 
     instances = [
         EC2Instance(f"i-id-{instance_id}", f"1.2.3.{instance_id}", f"host-{instance_id}", "sometime")
@@ -632,7 +817,8 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details, leve
     for node, instance in nodes_and_instances:
         node.instance = instance
 
-    nodes_in_replacement = [node.name for node in test_nodes]
+    # Make sure non-lists work
+    nodes_in_replacement = (node.name for node in test_nodes)
     failed_nodes = {}
     for node in test_nodes:
         if node.error_code:
@@ -926,6 +1112,11 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
                     "ice-c-2",
                     "ice-c-3",
                 ],
+                "LimitedInstanceCapacity": [
+                    "ice-g-1",
+                    "ice-g-2",
+                    "ice-g-3",
+                ],
                 "MaxSpotInstanceCountExceeded": [
                     "ice-d-1",
                     "ice-d-2",
@@ -973,10 +1164,11 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
                             "Error2": ["node-b-1", "node-b-2"],
                         },
                         "ice-failures": {
-                            "count": 15,
+                            "count": 18,
                             "InsufficientInstanceCapacity": ["ice-a-1", "ice-a-2", "ice-a-3"],
                             "InsufficientHostCapacity": ["ice-b-1", "ice-b-2"],
                             "InsufficientReservedInstanceCapacity": ["ice-c-1", "ice-c-2", "ice-c-3"],
+                            "LimitedInstanceCapacity": ["ice-g-1", "ice-g-2", "ice-g-3"],
                             "MaxSpotInstanceCountExceeded": ["ice-d-1", "ice-d-2"],
                             "Unsupported": ["ice-e-1", "ice-e-2", "ice-e-3"],
                             "SpotMaxPriceTooLow": ["ice-f-1", "ice-f-2"],
@@ -996,7 +1188,7 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
                             "UnauthorizedOperation": ["iam-k-1", "iam-k-2"],
                             "AccessDeniedException": ["iam-l-1"],
                         },
-                        "total": 32,
+                        "total": 35,
                     }
                 },
                 {
@@ -1134,6 +1326,89 @@ def test_publish_add_instance_for_nodes_failure_events(
 
     # Run test
     event_publisher.publish_add_instance_for_nodes_failure_events(error_code, error_message, failed_nodes)
+
+    # Assert calls
+    assert_that(received_events).is_length(len(expected_details))
+    for received_event, expected_detail in zip(received_events, expected_details):
+        assert_that(received_event).is_equal_to(expected_detail)
+
+
+@pytest.mark.parametrize(
+    "slurm_node_spec, expected_details, level_filter",
+    [
+        (
+            "queue1-dy-c6_xlarge-2,queue1-dy-c5_xlarge-[1-2,4,6,8-9],queue1-dy-c6_xlarge-6",
+            [
+                {
+                    "suspend-node": {
+                        "count": 8,
+                        "nodes": [
+                            {"name": "queue1-dy-c6_xlarge-2"},
+                            {"name": "queue1-dy-c5_xlarge-1"},
+                            {"name": "queue1-dy-c5_xlarge-2"},
+                            {"name": "queue1-dy-c5_xlarge-4"},
+                            {"name": "queue1-dy-c5_xlarge-6"},
+                            {"name": "queue1-dy-c5_xlarge-8"},
+                            {"name": "queue1-dy-c5_xlarge-9"},
+                            {"name": "queue1-dy-c6_xlarge-6"},
+                        ],
+                    }
+                }
+            ],
+            [],
+        ),
+        (
+            "queue1-dy-c6_xlarge-2,queue1-dy-c5_xlarge-[1-2,4,6,8-9],queue1-dy-c6_xlarge-6",
+            [],
+            ["ERROR", "WARNING", "INFO"],
+        ),
+    ],
+)
+def test_publish_suspend_events(slurm_node_spec, expected_details, level_filter):
+    received_events = []
+    event_publisher = ClusterEventPublisher(event_handler(received_events, level_filter=level_filter))
+
+    # Run test
+    event_publisher.publish_suspend_events(slurm_node_spec)
+
+    # Assert calls
+    assert_that(received_events).is_length(len(expected_details))
+    for received_event, expected_detail in zip(received_events, expected_details):
+        assert_that(received_event).is_equal_to(expected_detail)
+
+
+@pytest.mark.parametrize(
+    "slurm_node_spec, expected_details, level_filter",
+    [
+        (
+            "queue1-dy-c6_xlarge-2,queue1-dy-c5_xlarge-[1-2,4,6,8-9],queue1-dy-c6_xlarge-6",
+            [
+                {
+                    "suspend-error": {
+                        "count": 8,
+                        "nodes": [
+                            {"name": "queue1-dy-c6_xlarge-2"},
+                            {"name": "queue1-dy-c5_xlarge-1"},
+                            {"name": "queue1-dy-c5_xlarge-2"},
+                            {"name": "queue1-dy-c5_xlarge-4"},
+                            {"name": "queue1-dy-c5_xlarge-6"},
+                            {"name": "queue1-dy-c5_xlarge-8"},
+                            {"name": "queue1-dy-c5_xlarge-9"},
+                            {"name": "queue1-dy-c6_xlarge-6"},
+                        ],
+                    }
+                }
+            ],
+            ["ERROR", "WARNING", "INFO"],
+        ),
+    ],
+)
+def test_publish_suspend_error_events(slurm_node_spec, expected_details, level_filter):
+    received_events = []
+    event_publisher = ClusterEventPublisher(event_handler(received_events, level_filter=level_filter))
+
+    # Run test
+    event_publisher.publish_suspend_error_events("error message", slurm_node_spec)
 
     # Assert calls
     assert_that(received_events).is_length(len(expected_details))

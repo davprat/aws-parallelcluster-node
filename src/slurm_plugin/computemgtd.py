@@ -207,7 +207,7 @@ def _is_self_node_down(self_nodename):
             "Unable to retrieve current node state from slurm",
             event_type="node-state-exception",
             detail={
-                "exception": repr(e),
+                "exception": str(e),
             },
         )
 
@@ -291,7 +291,7 @@ def _run_computemgtd(config_file):
                     "Unable to reload daemon config, using previous one.",
                     event_type="configuration-failure-exception",
                     detail={
-                        "exception": repr(e),
+                        "exception": str(e),
                     },
                 )
         else:
@@ -321,7 +321,7 @@ def _run_computemgtd(config_file):
                 event_type="heartbeat-failure-exception",
                 detail={
                     "last-heartbeat": last_heartbeat.isoformat() if last_heartbeat else None,
-                    "exception": repr(e),
+                    "exception": str(e),
                 },
             )
         if expired_clustermgtd_heartbeat(last_heartbeat, current_time, computemgtd_config.clustermgtd_timeout):

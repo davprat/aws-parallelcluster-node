@@ -139,7 +139,7 @@ def is_clustermgtd_heartbeat_valid(current_time, clustermgtd_timeout, clustermgt
         return False
 
 
-metric_level_mapping = {
+event_to_log_level_mapping = {
     "CRITICAL": logging.CRITICAL,
     "FATAL": logging.CRITICAL,
     "ERROR": logging.ERROR,
@@ -150,7 +150,7 @@ metric_level_mapping = {
     "NOTSET": logging.NOTSET,
 }
 
-event_level_mapping = {
+log_to_event_level_mapping = {
     logging.CRITICAL: "CRITICAL",
     logging.ERROR: "ERROR",
     logging.WARNING: "WARNING",
@@ -163,11 +163,11 @@ event_level_mapping = {
 def event_publisher(event_logger, cluster_name, node_role, component, instance_id, **global_args):
     def emit_event(event_level, message, event_type, timestamp=None, event_supplier=None, **kwargs):
         log_level = (
-            metric_level_mapping.get(event_level, logging.NOTSET) if isinstance(event_level, str) else event_level
+            event_to_log_level_mapping.get(event_level, logging.NOTSET) if isinstance(event_level, str) else event_level
         )
 
         if event_logger.isEnabledFor(log_level):
-            event_level = event_level_mapping.get(log_level, "NOTSET")
+            event_level = log_to_event_level_mapping.get(log_level, "NOTSET")
             now = timestamp if timestamp else datetime.now(timezone.utc).isoformat(timespec="milliseconds")
             if not event_supplier:
                 event_supplier = [kwargs]

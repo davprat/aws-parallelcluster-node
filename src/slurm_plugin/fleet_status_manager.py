@@ -130,7 +130,7 @@ def _get_computefleet_status(computefleet_status_data_path):
             f"Cannot read compute fleet status data file: {computefleet_status_data_path}",
             event_type="compute-fleet-status-exception",
             detail={
-                "exception": repr(e),
+                "exception": str(e),
             },
         )
         raise

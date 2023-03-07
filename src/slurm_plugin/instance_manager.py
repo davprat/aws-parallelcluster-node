@@ -161,7 +161,7 @@ class InstanceManager:
             )
             self._update_failed_nodes(set(batch_nodes))
             if event_publisher:
-                event_publisher.publish_add_instance_for_nodes_failure_events("Exception", f"{repr(e)}", batch_nodes)
+                event_publisher.publish_add_instance_for_nodes_failure_events("Exception", f"{e}", batch_nodes)
 
         return []
 

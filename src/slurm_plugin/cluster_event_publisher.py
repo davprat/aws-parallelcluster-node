@@ -3,7 +3,6 @@ import re
 from collections import Counter
 from datetime import datetime, timezone
 
-# A nosec comment is appended to the following line in order to disable the B404 check.
 # In this file the input of the module subprocess is trusted.
 from typing import Callable, Dict, Iterable, List, Tuple
 
@@ -13,7 +12,7 @@ from slurm_plugin.slurm_resources import DynamicNode, SlurmNode
 logger = logging.getLogger(__name__)
 
 LAUNCH_FAILURE_GROUPING = {}
-for failure in SlurmNode.EC2_ICE_ERROR_CODES:
+for failure in [*SlurmNode.EC2_ICE_ERROR_CODES, "LimitedInstanceCapacity"]:
     LAUNCH_FAILURE_GROUPING.update({failure: "ice-failures"})
 
 for failure in ["VcpuLimitExceeded"]:
@@ -76,7 +75,10 @@ class ClusterEventPublisher:
             "Powering down node count",
             event_type="node-powering-down-count",
             timestamp=timestamp,
-            detail={"count": len(powering_down_nodes), "nodes": [{"name": node.name} for node in powering_down_nodes]},
+            detail={
+                "count": len(powering_down_nodes),
+                "nodes": [{"name": node.name} for node in self._limit_list(powering_down_nodes)],
+            },
         )
         self.publish_event(
             "DEBUG",
@@ -101,7 +103,6 @@ class ClusterEventPublisher:
         power_down_nodes: List[str],
     ):
         timestamp = ClusterEventPublisher.timestamp()
-
         self.publish_event(
             "WARNING" if unhealthy_dynamic_nodes else "DEBUG",
             "Number of dynamic nodes failing scheduler health check",
@@ -113,7 +114,7 @@ class ClusterEventPublisher:
                     {
                         "name": node.name,
                     }
-                    for node in unhealthy_dynamic_nodes
+                    for node in self._limit_list(unhealthy_dynamic_nodes)
                 ],
             },
         )
@@ -140,7 +141,7 @@ class ClusterEventPublisher:
             timestamp=timestamp,
             detail={
                 "count": len(instances_to_terminate),
-                "instances": [{"id": instance_id} for instance_id in instances_to_terminate],
+                "instances": [{"id": instance_id} for instance_id in self._limit_list(instances_to_terminate)],
             },
         )
         self.publish_event(
@@ -148,7 +149,10 @@ class ClusterEventPublisher:
             "Number of unhealthy dynamic nodes set to down and power_down",
             event_type="dynamic-node-failure-power-down-count",
             timestamp=timestamp,
-            detail={"count": len(power_down_nodes), "nodes": [{"name": node_name} for node_name in power_down_nodes]},
+            detail={
+                "count": len(power_down_nodes),
+                "nodes": [{"name": node_name} for node_name in self._limit_list(power_down_nodes)],
+            },
         )
 
     @log_exception(logger, "publish_unhealthy_static_node_events", catch_exception=Exception, raise_on_error=False)
@@ -157,12 +161,11 @@ class ClusterEventPublisher:
         unhealthy_static_nodes: List[SlurmNode],
         instances_to_terminate: List[str],
         successful_nodes: List[Tuple[str, any]],
-        nodes_in_replacement: List[str],
+        nodes_in_replacement: Iterable[str],
         failed_nodes: Dict[str, List[str]],
     ):
-        timestamp = ClusterEventPublisher.timestamp()
-
         def terminated_instances_supplier():
+            terminated_instances = [node for node in unhealthy_static_nodes if node.instance]
             yield {
                 "detail": {
                     "count": len(instances_to_terminate),
@@ -174,13 +177,15 @@ class ClusterEventPublisher:
                             "error-code": node.error_code,
                             "reason": node.reason,
                         }
-                        for node in unhealthy_static_nodes
-                        if node.instance
+                        for node in self._limit_list(terminated_instances)
                     ],
                 }
             }
 
         timestamp = ClusterEventPublisher.timestamp()
+
+        nodes_in_replacement = list(nodes_in_replacement)
+
         self.publish_event(
             "INFO" if unhealthy_static_nodes else "DEGUG",
             "Number of static nodes failing scheduler health check",
@@ -188,21 +193,24 @@ class ClusterEventPublisher:
             timestamp=timestamp,
             detail={
                 "count": len(unhealthy_static_nodes),
-                "nodes": [{"name": node.name} for node in unhealthy_static_nodes],
+                "nodes": [{"name": node.name} for node in self._limit_list(unhealthy_static_nodes)],
             },
         )
+
         self.publish_event(
             "DEBUG",
             "Static node failing scheduler health check",
             event_type="static-node-health-check-failure",
             timestamp=timestamp,
-            event_supplier=({"detail": {"node": node.description()}} for node in unhealthy_static_nodes),
+            event_supplier=(
+                {"detail": {"node": node.description()}} for node in self._limit_list(unhealthy_static_nodes)
+            ),
         )
 
         self.publish_event(
             "INFO" if instances_to_terminate else "DEBUG",
             "Terminated instances backing unhealthy nodes",
-            event_type="static-node-failure-instance-terminate-count",
+            event_type="static-node-instance-terminate-count",
             timestamp=timestamp,
             event_supplier=terminated_instances_supplier(),
         )
@@ -212,7 +220,7 @@ class ClusterEventPublisher:
             "Number of successfully launched static nodes",
             event_type="successful-node-launch-count",
             timestamp=timestamp,
-            event_supplier=ClusterEventPublisher._successful_node_launch_supplier(successful_nodes),
+            event_supplier=self._successful_node_launch_supplier(successful_nodes),
         )
 
         self.publish_event(
@@ -238,7 +246,7 @@ class ClusterEventPublisher:
             timestamp=timestamp,
             detail={
                 "count": len(nodes_in_replacement),
-                "nodes": [{"name": node_name} for node_name in nodes_in_replacement],
+                "nodes": [{"name": node_name} for node_name in self._limit_list(nodes_in_replacement)],
             },
         )
 
@@ -287,18 +295,22 @@ class ClusterEventPublisher:
 
     @log_exception(logger, "publish_orphaned_instance_events", catch_exception=Exception, raise_on_error=False)
     def publish_orphaned_instance_events(self, cluster_instances: List[any], instances_to_terminate: List[str]):
+        def detail_supplier():
+            orphanded_instances = [instance for instance in cluster_instances if instance.id in instances_to_terminate]
+            yield {
+                "detail": {
+                    "count": len(instances_to_terminate),
+                    "instances": [{"id": instance.id} for instance in self._limit_list(orphanded_instances)],
+                }
+            }
+
         timestamp = ClusterEventPublisher.timestamp()
         self.publish_event(
             "WARNING" if instances_to_terminate else "DEBUG",
             "Orphaned instance count",
             event_type="orphaned-instance-count",
             timestamp=timestamp,
-            detail={
-                "count": len(instances_to_terminate),
-                "instances": [
-                    {"id": instance.id} for instance in cluster_instances if instance.id in instances_to_terminate
-                ],
-            },
+            event_supplier=detail_supplier(),
         )
         self.publish_event(
             "DEBUG",
@@ -356,7 +368,7 @@ class ClusterEventPublisher:
             detail={
                 "health-check-type": health_check_type,
                 "count": len(nodes_failing_health_check),
-                "nodes": [{"name": node.name} for node in nodes_failing_health_check],
+                "nodes": [{"name": node.name} for node in self._limit_list(nodes_failing_health_check)],
             },
         )
         self.publish_event(
@@ -367,7 +379,7 @@ class ClusterEventPublisher:
             detail={
                 "health-check-type": health_check_type,
                 "count": len(rebooting_nodes),
-                "nodes": [{"name": node.name} for node in rebooting_nodes],
+                "nodes": [{"name": node.name} for node in self._limit_list(rebooting_nodes)],
             },
         )
         self.publish_event(
@@ -403,7 +415,7 @@ class ClusterEventPublisher:
                     {
                         "name": node.name,
                     }
-                    for node in nodes_in_replacement
+                    for node in self._limit_list(nodes_in_replacement)
                 ],
             },
         )
@@ -429,13 +441,14 @@ class ClusterEventPublisher:
         self, powering_down_nodes: List[SlurmNode], instances_to_terminate: List[str]
     ):
         def supply_nodes():
+            terminated_instances = [
+                node for node in powering_down_nodes if node.instance and node.instance.id in instances_to_terminate
+            ]
             yield {
                 "detail": {
-                    "count": len(instances_to_terminate),
+                    "count": len(terminated_instances),
                     "nodes": [
-                        {"name": node.name, "id": node.instance.id}
-                        for node in powering_down_nodes
-                        if node.instance and node.instance.id in instances_to_terminate
+                        {"name": node.name, "id": node.instance.id} for node in self._limit_list(terminated_instances)
                     ],
                 }
             }
@@ -471,13 +484,12 @@ class ClusterEventPublisher:
     )
     def publish_add_instance_for_nodes_success_events(self, successful_nodes: List[Tuple[str, any]]):
         timestamp = ClusterEventPublisher.timestamp()
-
         self.publish_event(
             "DEBUG",
             "Successfully launched node batch",
             event_type="successful-node-launch-batch-count",
             timestamp=timestamp,
-            event_supplier=ClusterEventPublisher._successful_node_launch_supplier(successful_nodes),
+            event_supplier=self._successful_node_launch_supplier(successful_nodes),
         )
 
     @log_exception(
@@ -494,7 +506,7 @@ class ClusterEventPublisher:
                     "count": len(failed_nodes) if failed_nodes else 0,
                     "error-code": error_code,
                     "error-message": error_message,
-                    "nodes": [{"name": node} for node in failed_nodes],
+                    "nodes": [{"name": node} for node in self._limit_list(failed_nodes)],
                 }
             }
 
@@ -509,7 +521,6 @@ class ClusterEventPublisher:
     @log_exception(logger, "publish_node_launch_events", catch_exception=Exception, raise_on_error=False)
     def publish_node_launch_events(self, successful_nodes: List[Tuple[str, any]], failed_nodes: Dict[str, List[str]]):
         timestamp = ClusterEventPublisher.timestamp()
-
         self.publish_event(
             "WARNING" if failed_nodes else "DEBUG",
             "Number of nodes that failed to launch",
@@ -523,7 +534,7 @@ class ClusterEventPublisher:
             "Number of successfully launched nodes",
             event_type="successful-node-launch-count",
             timestamp=timestamp,
-            event_supplier=ClusterEventPublisher._successful_node_launch_supplier(successful_nodes),
+            event_supplier=self._successful_node_launch_supplier(successful_nodes),
         )
 
         self.publish_event(
@@ -554,33 +565,101 @@ class ClusterEventPublisher:
     @log_exception(logger, "publish_node_launch_events", catch_exception=Exception, raise_on_error=False)
     def publish_suspend_events(self, slurm_node_spec: str):
         def detail_supplier():
-            yield {"detail": {"nodes": list(_expand_slurm_node_spec(slurm_node_spec))}}
+            nodes = list(_expand_slurm_node_spec(slurm_node_spec))
+            yield {"detail": {"count": len(nodes), "nodes": [{"name": node} for node in self._limit_list(nodes)]}}
 
         self.publish_event("DEBUG", "Node Suspended", event_type="suspend-node", event_supplier=detail_supplier())
 
     @log_exception(logger, "publish_node_launch_events", catch_exception=Exception, raise_on_error=False)
     def publish_suspend_error_events(self, error_message, slurm_node_spec: str):
         def detail_supplier():
-            yield {"detail": {"nodes": list(_expand_slurm_node_spec(slurm_node_spec))}}
+            nodes = list(_expand_slurm_node_spec(slurm_node_spec))
+            yield {"detail": {"count": len(nodes), "nodes": [{"name": node} for node in self._limit_list(nodes)]}}
 
         self.publish_event("ERROR", error_message, event_type="suspend-error", event_supplier=detail_supplier())
+
+    def _successful_node_launch_supplier(self, successful_nodes: List[Tuple[str, any]]):
+        yield {
+            "detail": {
+                "count": len(successful_nodes),
+                "nodes": [
+                    {"name": name, "id": instance.id, "ip": instance.private_ip}
+                    for name, instance in self._limit_list(successful_nodes)
+                ],
+            },
+        }
+
+    def _count_insufficient_capacity_errors(
+        self, ice_compute_resources_and_nodes_map: Dict[str, Dict[str, List[SlurmNode]]]
+    ):
+        def extract_nodes():
+            for resources in ice_compute_resources_and_nodes_map.values():
+                for nodes in resources.values():
+                    for node in nodes:
+                        yield {
+                            "name": node.name,
+                        }
+
+        yield {
+            "detail": {
+                "count": sum(
+                    (
+                        sum(len(nodes) for nodes in resource)
+                        for resource in (
+                            resources.values() for resources in ice_compute_resources_and_nodes_map.values()
+                        )
+                    )
+                ),
+                "nodes": self._limit_list(list(extract_nodes())),
+            }
+        }
+
+    def _flatten_insufficient_capacity_errors(
+        self, ice_compute_resources_and_nodes_map: Dict[str, Dict[str, List[SlurmNode]]]
+    ):
+        for partition_name, resources in ice_compute_resources_and_nodes_map.items():
+            for resource_name, nodes in resources.items():
+                yield {
+                    "detail": {
+                        "partition": partition_name,
+                        "resource": resource_name,
+                        "error-code": nodes[0].error_code if nodes else None,
+                        "count": len(nodes),
+                        "nodes": [{"name": node.name} for node in self._limit_list(nodes)],
+                    }
+                }
+
+    def _get_launch_failure_details(self, failed_nodes: Dict[str, List[str]]) -> Dict:
+        detail_map = {"other-failures": {"count": 0}}
+        for failure_type in LAUNCH_FAILURE_GROUPING.values():
+            detail_map.setdefault(failure_type, {"count": 0})
+
+        total_failures = 0
+        for error_code, nodes in failed_nodes.items():
+            total_failures += len(nodes)
+            failure_type = ClusterEventPublisher._get_failure_type_from_error_code(error_code)
+            error_entry = detail_map.get(failure_type)
+            error_entry.update(
+                {
+                    "count": error_entry.get("count") + len(nodes),
+                    error_code: self._limit_list(list(nodes)),
+                }
+            )
+
+        detail_map.update({"total": total_failures})
+
+        yield {
+            "detail": detail_map,
+        }
+
+    def _limit_list(self, source_list: List) -> List:
+        return source_list[: self._max_list_size] if self._max_list_size else source_list
 
     @staticmethod
     def _count_cluster_states(nodes: list[SlurmNode]):
         count_map = Counter((node.canonical_state_string for node in nodes))
         for state, count in count_map.items():
             yield {"detail": {"state": state, "count": count}}
-
-    @staticmethod
-    def _successful_node_launch_supplier(successful_nodes: List[Tuple[str, any]]):
-        yield {
-            "detail": {
-                "count": len(successful_nodes),
-                "nodes": [
-                    {"name": name, "id": instance.id, "ip": instance.private_ip} for name, instance in successful_nodes
-                ],
-            },
-        }
 
     @staticmethod
     def _format_node_idle_time(max_node: SlurmNode, idle_nodes: List[SlurmNode]):
@@ -624,46 +703,6 @@ class ClusterEventPublisher:
                 yield {"detail": {"partition": partition, "resource": resource, "count": count}}
 
     @staticmethod
-    def _count_insufficient_capacity_errors(ice_compute_resources_and_nodes_map: Dict[str, Dict[str, List[SlurmNode]]]):
-        def extract_nodes():
-            for resources in ice_compute_resources_and_nodes_map.values():
-                for nodes in resources.values():
-                    for node in nodes:
-                        yield {
-                            "name": node.name,
-                        }
-
-        yield {
-            "detail": {
-                "count": sum(
-                    (
-                        sum(len(nodes) for nodes in resource)
-                        for resource in (
-                            resources.values() for resources in ice_compute_resources_and_nodes_map.values()
-                        )
-                    )
-                ),
-                "nodes": list(extract_nodes()),
-            }
-        }
-
-    @staticmethod
-    def _flatten_insufficient_capacity_errors(
-        ice_compute_resources_and_nodes_map: Dict[str, Dict[str, List[SlurmNode]]]
-    ):
-        for partition_name, resources in ice_compute_resources_and_nodes_map.items():
-            for resource_name, nodes in resources.items():
-                yield {
-                    "detail": {
-                        "partition": partition_name,
-                        "resource": resource_name,
-                        "error-code": nodes[0].error_code if nodes else None,
-                        "count": len(nodes),
-                        "nodes": [{"name": node.name} for node in nodes],
-                    }
-                }
-
-    @staticmethod
     def _flatten_insufficient_capacity_nodes(
         ice_compute_resources_and_nodes_map: Dict[str, Dict[str, List[SlurmNode]]]
     ):
@@ -691,25 +730,6 @@ class ClusterEventPublisher:
                         "node": {"name": node_name},
                     }
                 }
-
-    @staticmethod
-    def _get_launch_failure_details(failed_nodes: Dict[str, List[str]]) -> Dict:
-        detail_map = {"other-failures": {"count": 0}}
-        for failure_type in LAUNCH_FAILURE_GROUPING.values():
-            detail_map.setdefault(failure_type, {"count": 0})
-
-        total_failures = 0
-        for error_code, nodes in failed_nodes.items():
-            total_failures += len(nodes)
-            failure_type = ClusterEventPublisher._get_failure_type_from_error_code(error_code)
-            error_entry = detail_map.get(failure_type)
-            error_entry.update({"count": error_entry.get("count") + len(nodes), error_code: list(nodes)})
-
-        detail_map.update({"total": total_failures})
-
-        yield {
-            "detail": detail_map,
-        }
 
     @staticmethod
     def _get_failure_type_from_error_code(error_code: str) -> str:
@@ -754,14 +774,18 @@ def _expand_slurm_node_spec(slurm_node_spec: str):
             if not base_name:
                 raise Exception(f"Invalid node spec @{slurm_node_spec} - empty node name not allowed.")
             if slurm_node_spec[end_pos] == ",":
-                slurm_node_spec = slurm_node_spec[match.end() :]
+                # fmt: off
+                slurm_node_spec = slurm_node_spec[match.end():]
+                # fmt: on
                 yield base_name
             elif slurm_node_spec[end_pos] == "[":
                 match = re.search(r"\],?", slurm_node_spec)
                 if not match or match.start() < end_pos:
                     raise Exception(f"Invalid node spec @{slurm_node_spec} - missing closing ']'.")
-                range_spec = slurm_node_spec[end_pos + 1 : match.start()]
-                slurm_node_spec = slurm_node_spec[match.end() :]
+                # fmt: off
+                range_spec = slurm_node_spec[end_pos + 1:match.start()]
+                slurm_node_spec = slurm_node_spec[match.end():]
+                # fmt: on
                 yield from _generate_from_range_spec(base_name, range_spec)
         else:
             yield slurm_node_spec

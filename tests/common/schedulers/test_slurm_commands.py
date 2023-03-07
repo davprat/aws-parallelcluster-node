@@ -903,11 +903,12 @@ def test_get_nodes_info(nodes, cmd_timeout, run_command_call, run_command_side_e
                 "NodeName=queue1-st-compute-resource-1-1\nNodeAddr=192.168.123.191\n"
                 "NodeHostName=queue1-st-compute-resource-1-1\nState=DOWN+CLOUD+REBOOT_ISSUED\nPartitions=queue1\n"
                 "SlurmdStartTime=2023-01-26T09:57:15\n"
+                "LastBusyTime=2023-01-26T09:57:15\n"
                 "Reason=Reboot ASAP : reboot issued [slurm@2023-01-26T10:11:39]\n######\n"
                 "NodeName=queue1-st-compute-resource-1-2\nNodeAddr=192.168.123.192\n"
                 "NodeHostName=queue1-st-compute-resource-1-2\nState=DOWN+CLOUD+REBOOT_ISSUED\nPartitions=queue1\n"
-                "LastBusyTime=2023-01-26T09:57:15\n"
                 "SlurmdStartTime=2023-01-26T09:57:16\n"
+                "LastBusyTime=Unknown\n"
                 "Reason=Reboot ASAP : reboot issued [slurm@2023-01-26T10:11:40]\n######\n"
             ),
         )

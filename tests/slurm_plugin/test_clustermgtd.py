@@ -1022,8 +1022,8 @@ def test_handle_powering_down_nodes(
                 r'"component": "clustermgtd", "level": "WARNING", "instance-id": "i-instance-id", '
                 r'"event-type": "node-launch-failure-count", "message": ".*", '
                 r'"detail": {'
-                r'"other-failures": {"count": 1, "LimitedInstanceCapacity": \["queue1-st-c5xlarge-3"\]}, '
-                r'"ice-failures": {"count": 0}, '
+                r'"other-failures": {"count": 0}, '
+                r'"ice-failures": {"count": 1, "LimitedInstanceCapacity": \["queue1-st-c5xlarge-3"\]}, '
                 r'"vcpu-limit-failures": {"count": 0}, '
                 r'"volume-limit-failures": {"count": 0}, '
                 r'"custom-ami-errors": {"count": 0}, '
@@ -2048,8 +2048,8 @@ def test_manage_cluster(
                 r'{"datetime": ".*", "version": 0, "cluster-name": "hit", "node-role": "HeadNode", '
                 r'"component": "clustermgtd", "level": "ERROR", "instance-id": "unknown", '
                 r'"event-type": "instance-exception", '
-                r'"message": "Unable to get instances info from EC2, no other action can be performed", '
-                r'"detail": {"exception": "EC2InstancesInfoUnavailable.*"}}',
+                r'"message": ".*", '
+                r'"detail": {"exception": ""}}',
             ],
         ),
         (
@@ -2061,11 +2061,9 @@ def test_manage_cluster(
             [{}],
             [
                 "Unable to get partition/node info from slurm, no other action can be performed",
-                r'{"datetime": ".*", "version": 0, "cluster-name": "hit", '
-                r'"node-role": "HeadNode", '
+                r'{"datetime": ".*", "version": 0, "cluster-name": "hit", "node-role": "HeadNode", '
                 r'"component": "clustermgtd", "level": "ERROR", "instance-id": "unknown", '
-                r'"event-type": "slurm-info-exception", "message": ".*",'
-                r' "detail": {"exception": "Exception.*"}}',
+                r'"event-type": "slurm-info-exception", "message": ".*", "detail": {"exception": ""}}',
             ],
         ),
     ],

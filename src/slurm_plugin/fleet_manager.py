@@ -237,7 +237,7 @@ class Ec2RunInstancesManager(FleetManager):
                 "launch-instance-client-exception",
                 detail={
                     "request-id": e.response.get("ResponseMetadata").get("RequestId"),
-                    "exception": repr(e),
+                    "exception": str(e),
                 },
             )
             raise e
@@ -412,7 +412,7 @@ class Ec2CreateFleetManager(FleetManager):
                 "create-fleet-client-exception",
                 detail={
                     "request-id": e.response.get("ResponseMetadata").get("RequestId"),
-                    "exception": repr(e),
+                    "exception": str(e),
                 },
             )
             raise e

@@ -511,7 +511,7 @@ class ClusterManager:
                         "ERROR",
                         "Unable to get partition/node info from slurm, no other action can be performed.",
                         "slurm-info-exception",
-                        detail={"exception": repr(e)},
+                        detail={"exception": str(e)},
                     )
                     return
 
@@ -524,7 +524,7 @@ class ClusterManager:
                         "ERROR",
                         "Unable to get instances info from EC2, no other action can be performed",
                         "instance-exception",
-                        detail={"exception": repr(e)},
+                        detail={"exception": str(e)},
                     )
                     return
 

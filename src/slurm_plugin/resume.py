@@ -259,7 +259,7 @@ def main():
             "Exception while running slurm_resume",
             event_type="slurm-resume-exception",
             details={
-                "exception": repr(e),
+                "exception": str(e),
                 "nodes": args.nodes,
             },
         )
