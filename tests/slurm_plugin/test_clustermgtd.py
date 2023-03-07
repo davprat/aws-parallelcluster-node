@@ -1152,7 +1152,9 @@ def test_handle_unhealthy_static_nodes(
         )
     else:
         cluster_manager._instance_manager.delete_instances.assert_not_called()
-    cluster_manager._instance_manager.add_instances_for_nodes.assert_called_with(add_node_list, 5, True)
+    cluster_manager._instance_manager.add_instances_for_nodes.assert_called_with(
+        add_node_list, 5, True, event_publisher=cluster_manager._event_publisher
+    )
     assert_that(caplog.records).is_length(len(expected_warnings))
     for actual, expected in zip(caplog.records, expected_warnings):
         assert_that(actual.message).matches(expected)

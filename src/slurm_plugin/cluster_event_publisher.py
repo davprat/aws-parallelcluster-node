@@ -175,10 +175,63 @@ class ClusterEventPublisher:
     def publish_static_nodes_in_replacement(
         self,
         unhealthy_static_nodes: List[SlurmNode],
+        instances_to_terminate: List[str],
+        successful_nodes: List[Tuple[str, any]],
         nodes_in_replacement: List[str],
         failed_nodes: Dict[str, List[str]],
     ):
         timestamp = ClusterEventPublisher.timestamp()
+
+        def terminated_instances_supplier():
+            yield {
+                "detail": {
+                    "count": len(instances_to_terminate),
+                    "nodes": [
+                        {
+                            "name": node.name,
+                            "id": node.instance.id,
+                            "ip": node.instance.private_ip,
+                            "error-code": node.error_code,
+                            "reason": node.reason,
+                        }
+                        for node in unhealthy_static_nodes
+                        if node.instance
+                    ],
+                }
+            }
+
+        self.publish_event(
+            "INFO" if instances_to_terminate else "DEBUG",
+            "Terminated instances backing unhealthy nodes",
+            event_type="terminated-unhealthy-node-instance-count",
+            timestamp=timestamp,
+            event_supplier=terminated_instances_supplier(),
+        )
+
+        self.publish_event(
+            "INFO",
+            "Number of successfully launched static nodes",
+            event_type="successful-node-launch-count",
+            timestamp=timestamp,
+            event_supplier=ClusterEventPublisher._successful_node_launch_supplier(successful_nodes),
+        )
+
+        self.publish_event(
+            "DEBUG",
+            "Successfully launched static node",
+            event_type="successful-node-launch",
+            timestamp=timestamp,
+            event_supplier=(
+                {
+                    "detail": {
+                        "node": {"name": node},
+                        "instance": instance.description(),
+                    }
+                }
+                for node, instance in successful_nodes
+            ),
+        )
+
         self.publish_event(
             "INFO" if nodes_in_replacement else "DEBUG",
             "After node maintenance, nodes currently in replacement",
@@ -189,6 +242,7 @@ class ClusterEventPublisher:
                 "nodes": [{"name": node_name} for node_name in nodes_in_replacement],
             },
         )
+
         self.publish_event(
             "DEBUG",
             "After node maintenance, node currently in replacement",
@@ -204,23 +258,20 @@ class ClusterEventPublisher:
                 if node.name in nodes_in_replacement
             ),
         )
+
         self.publish_event(
             "WARNING" if failed_nodes else "DEBUG",
             "Number of static nodes that failed replacement after node maintenance",
             event_type="node-launch-failure-count",
             timestamp=timestamp,
-            event_supplier=[
-                {
-                    "detail": self._get_launch_failure_details(failed_nodes),
-                }
-            ],
+            event_supplier=self._get_launch_failure_details(failed_nodes),
         )
 
         for error_code, failed_node_list in failed_nodes.items():
             self.publish_event(
                 "DEBUG",
                 "After node maintenance, node failed replacement",
-                event_type="static-node-in-replacement-failure",
+                event_type="node-launch-failure",
                 timestamp=timestamp,
                 event_supplier=(
                     {
@@ -443,24 +494,56 @@ class ClusterEventPublisher:
             ),
         )
 
+    @log_exception(
+        logger, "publish_add_instance_for_nodes_success_events", catch_exception=Exception, raise_on_error=False
+    )
+    def publish_add_instance_for_nodes_success_events(self, successful_nodes: List[Tuple[str, any]]):
+        timestamp = ClusterEventPublisher.timestamp()
+
+        self.publish_event(
+            "DEBUG",
+            "Successfully launched node batch",
+            event_type="successful-node-launch-batch-count",
+            timestamp=timestamp,
+            event_supplier=ClusterEventPublisher._successful_node_launch_supplier(successful_nodes),
+        )
+
+    @log_exception(
+        logger, "publish_add_instance_for_nodes_failure_events", catch_exception=Exception, raise_on_error=False
+    )
+    def publish_add_instance_for_nodes_failure_events(
+        self, error_code: str, error_message: str, failed_nodes: List[str]
+    ):
+        timestamp = ClusterEventPublisher.timestamp()
+
+        def supply_details():
+            yield {
+                "detail": {
+                    "count": len(failed_nodes) if failed_nodes else 0,
+                    "error-code": error_code,
+                    "error-message": error_message,
+                    "nodes": [{"name": node} for node in failed_nodes],
+                }
+            }
+
+        self.publish_event(
+            "INFO",
+            "Failed to launch a batch of nodes",
+            event_type="batch-node-launch-failure-count",
+            timestamp=timestamp,
+            event_supplier=supply_details(),
+        )
+
     # Slurm Resume Events
     @log_exception(logger, "publish_node_launch_events", catch_exception=Exception, raise_on_error=False)
     def publish_node_launch_events(self, successful_nodes: List[Tuple[str, any]], failed_nodes: Dict[str, List[str]]):
-        def success_supplier():
-            yield {
-                "detail": {
-                    "count": len(successful_nodes),
-                    "nodes": [{"name": name, "id": instance.id} for name, instance in successful_nodes],
-                },
-            }
-
         timestamp = ClusterEventPublisher.timestamp()
         self.publish_event(
             "INFO",
             "Number of successfully launched nodes",
-            event_type="successful-launch-node-count",
+            event_type="successful-node-launch-count",
             timestamp=timestamp,
-            event_supplier=success_supplier(),
+            event_supplier=ClusterEventPublisher._successful_node_launch_supplier(successful_nodes),
         )
 
         self.publish_event(
@@ -484,11 +567,7 @@ class ClusterEventPublisher:
             "Number of nodes that failed to launch",
             event_type="node-launch-failure-count",
             timestamp=timestamp,
-            event_supplier=[
-                {
-                    "detail": self._get_launch_failure_details(failed_nodes),
-                }
-            ],
+            event_supplier=self._get_launch_failure_details(failed_nodes),
         )
 
         self.publish_event(
@@ -502,19 +581,28 @@ class ClusterEventPublisher:
     # Slurm Suspend Events
     @log_exception(logger, "publish_node_launch_events", catch_exception=Exception, raise_on_error=False)
     def publish_suspend_events(self, slurm_node_spec: str):
-        event_publisher._publish_event(
-            "INFO", "Node Suspended", event_type="suspend-node", detail={"nodes": args.nodes}
-        )
+        self.publish_event("INFO", "Node Suspended", event_type="suspend-node", detail={"nodes": slurm_node_spec})
 
     @log_exception(logger, "publish_node_launch_events", catch_exception=Exception, raise_on_error=False)
     def publish_suspend_error_events(self, error_message, slurm_node_spec: str):
-        self.publish_event("ERROR", error_message, event_type="suspend-error", detail={"nodes": args.nodes})
+        self.publish_event("ERROR", error_message, event_type="suspend-error", detail={"nodes": slurm_node_spec})
 
     @staticmethod
     def _count_cluster_states(nodes: list[SlurmNode]):
         count_map = Counter((node.canonical_state_string for node in nodes))
         for state, count in count_map.items():
             yield {"detail": {"state": state, "count": count}}
+
+    @staticmethod
+    def _successful_node_launch_supplier(successful_nodes: List[Tuple[str, any]]):
+        yield {
+            "detail": {
+                "count": len(successful_nodes),
+                "nodes": [
+                    {"name": name, "id": instance.id, "ip": instance.private_ip} for name, instance in successful_nodes
+                ],
+            },
+        }
 
     @staticmethod
     def _format_node_idle_time(max_node: SlurmNode, idle_nodes: List[SlurmNode]):
@@ -627,56 +715,6 @@ class ClusterEventPublisher:
                 }
 
     @staticmethod
-    def _expand_slurm_node_spec(slurm_node_spec: str):
-        """
-        Expand slurm nodelist notation into individual node names.
-
-        Sample slurm nodelist notation:
-        'queue1-dy-c5_xlarge-[1-3,7,11-12],queue2-st-t2_micro-5,queue3-dy-c5_large-[7,13-20]'.
-        """
-
-        def generate_from_name_spec(base_name: str, range_spec: str):
-            """
-            Expand a slurm range spec to individual node names
-            :param base_name: base name of node, e.g. 'queue1-dy-c5_xlarge-'
-            :param range_spec: list of ranges, e.g. '1-3,7,11-12'
-            :return: yields individual node names, e.g.
-            ['queue1-dy-c5_xlarge-1', 'queue1-dy-c5_xlarge-2', 'queue1-dy-c5_xlarge-3']
-            """
-            span_list = re.split(r",", range_spec)
-            for span in span_list:
-                range_list = re.split(r"-")
-                if len(range_list) < 0 or len(range_list) > 2:
-                    raise Exception(f"Invalid range spec: {range_spec}")
-                start = int(range_list[0])
-                end = int(range_list[1]) if len(range_list) > 1 else start
-                for node_number in range(start, end + 1):
-                    yield f"{base_name}{node_number}"
-
-        slurm_node_spec = re.sub(r"\s+", "", slurm_node_spec)
-        start = 0
-        while slurm_node_spec[start]:
-            match = slurm_node_spec[start:].search(r"[|,")
-            if match:
-                reach = match.start
-                if slurm_node_spec[reach] == ",":
-                    yield slurm_node_spec[start:reach]
-                    start = reach + 1
-                elif slurm_node_spec[reach] == "[":
-                    match = re.search(r"],?", slurm_node_spec[reach:])
-                    if not match:
-                        raise Exception(
-                            message=f"Invalid node spec @{start}: {slurm_node_spec[start:]} - missing closing ']"
-                        )
-                    yield from generate_from_range_spec(
-                        slurm_node_spec[start : reach + 1], slurm_node_spec[reach : match.start]
-                    )
-                    start = match.end + 1
-            else:
-                yield slurm_node_spec[start:]
-                break
-
-    @staticmethod
     def _get_launch_failure_details(failed_nodes: Dict[str, List[str]]) -> Dict:
         detail_map = {"other-failures": {"count": 0}}
         for failure_type in LAUNCH_FAILURE_GROUPING.values():
@@ -691,8 +729,62 @@ class ClusterEventPublisher:
 
         detail_map.update({"total": total_failures})
 
-        return detail_map
+        yield {
+            "detail": detail_map,
+        }
 
     @staticmethod
     def _get_failure_type_from_error_code(error_code: str) -> str:
         return LAUNCH_FAILURE_GROUPING.get(error_code, "other-failures")
+
+
+def _generate_from_range_spec(base_name: str, node_range_spec: str):
+    """
+    Expand a slurm range spec to individual node names.
+
+    :param base_name: base name of node, e.g. 'queue1-dy-c5_xlarge-'
+    :param node_range_spec: slurm node range spec, e.g. '1-3,7,11-12'
+    :return: yields individual node names, e.g.
+    ['queue1-dy-c5_xlarge-1', 'queue1-dy-c5_xlarge-2', 'queue1-dy-c5_xlarge-3']
+    """
+    span_list = re.split(r",", node_range_spec)
+    for span in span_list:
+        range_list = re.split(r"-", span)
+        if len(range_list) < 0 or len(range_list) > 2:
+            raise Exception(f"Invalid range spec: {node_range_spec}")
+        start = int(range_list[0])
+        end = int(range_list[1]) if len(range_list) > 1 else start
+        if start > end:
+            raise Exception(f"Invalid range spec: {node_range_spec}")
+        for node_number in range(start, end + 1):
+            yield f"{base_name}{node_number}"
+
+
+def _expand_slurm_node_spec(slurm_node_spec: str):
+    """
+    Expand slurm nodelist notation into individual node names.
+
+    Sample slurm nodelist notation:
+    'queue1-dy-c5_xlarge-[1-3,7,11-12],queue2-st-t2_micro-5,queue3-dy-c5_large-[7,13-20]'.
+    """
+    slurm_node_spec = re.sub(r"\s+", "", slurm_node_spec)
+    while slurm_node_spec:
+        match = re.search(r"\[|,", slurm_node_spec)
+        if match:
+            end_pos = match.start()
+            base_name = slurm_node_spec[:end_pos]
+            if not base_name:
+                raise Exception(f"Invalid node spec @{slurm_node_spec} - empty node name not allowed.")
+            if slurm_node_spec[end_pos] == ",":
+                slurm_node_spec = slurm_node_spec[match.end() :]
+                yield base_name
+            elif slurm_node_spec[end_pos] == "[":
+                match = re.search(r"\],?", slurm_node_spec)
+                if not match or match.start() < end_pos:
+                    raise Exception(f"Invalid node spec @{slurm_node_spec} - missing closing ']'.")
+                range_spec = slurm_node_spec[end_pos + 1 : match.start()]
+                slurm_node_spec = slurm_node_spec[match.end() :]
+                yield from _generate_from_range_spec(base_name, range_spec)
+        else:
+            yield slurm_node_spec
+            break

@@ -23,6 +23,7 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 from common.schedulers.slurm_commands import update_nodes
 from common.utils import grouper
+from slurm_plugin.cluster_event_publisher import ClusterEventPublisher
 from slurm_plugin.common import ComputeInstanceDescriptor, log_exception, print_with_count
 from slurm_plugin.fleet_manager import EC2Instance, FleetManagerFactory
 from slurm_plugin.slurm_resources import (
@@ -90,7 +91,12 @@ class InstanceManager:
         self.failed_nodes = {}
 
     def add_instances_for_nodes(
-        self, node_list, launch_batch_size, update_node_address=True, all_or_nothing_batch=False
+        self,
+        node_list,
+        launch_batch_size,
+        update_node_address=True,
+        all_or_nothing_batch=False,
+        event_publisher: ClusterEventPublisher = None,
     ):
         """Launch requested EC2 instances for nodes."""
         # Reset failed_nodes
@@ -114,33 +120,50 @@ class InstanceManager:
                     self._create_fleet_overrides,
                 )
                 for batch_nodes in grouper(slurm_node_list, launch_batch_size):
-                    try:
-                        launched_instances = fleet_manager.launch_ec2_instances(len(batch_nodes))
+                    successful_node_batch = self._launch_node_batch(
+                        fleet_manager, batch_nodes, update_node_address, event_publisher
+                    )
+                    successful_nodes.extend(successful_node_batch)
 
-                        if update_node_address:
-                            assigned_nodes = self._update_slurm_node_addrs(list(batch_nodes), launched_instances)
-                            try:
-                                self._store_assigned_hostnames(assigned_nodes)
-                                self._update_dns_hostnames(assigned_nodes)
-                            except Exception:
-                                self._update_failed_nodes(set(assigned_nodes.keys()))
-                        successful_nodes.extend(zip(batch_nodes[: len(launched_instances)], launched_instances))
-                    except ClientError as e:
-                        logger.error(
-                            "Encountered exception when launching instances for nodes %s: %s",
-                            print_with_count(batch_nodes),
-                            e,
-                        )
-                        error_code = e.response.get("Error", {}).get("Code")
-                        self._update_failed_nodes(set(batch_nodes), error_code)
-                    except Exception as e:
-                        logger.error(
-                            "Encountered exception when launching instances for nodes %s: %s",
-                            print_with_count(batch_nodes),
-                            e,
-                        )
-                        self._update_failed_nodes(set(batch_nodes))
         return successful_nodes
+
+    def _launch_node_batch(self, fleet_manager, batch_nodes, update_node_address, event_publisher):
+        try:
+            launched_instances = fleet_manager.launch_ec2_instances(len(batch_nodes))
+
+            if update_node_address:
+                assigned_nodes = self._update_slurm_node_addrs(list(batch_nodes), launched_instances)
+                try:
+                    self._store_assigned_hostnames(assigned_nodes)
+                    self._update_dns_hostnames(assigned_nodes)
+                except Exception:
+                    self._update_failed_nodes(set(assigned_nodes.keys()))
+            successful_node_batch = list(zip(batch_nodes[: len(launched_instances)], launched_instances))
+            if event_publisher:
+                event_publisher.publish_add_instance_for_nodes_success_events(successful_node_batch)
+            return successful_node_batch
+        except ClientError as e:
+            logger.error(
+                "Encountered exception when launching instances for nodes %s: %s",
+                print_with_count(batch_nodes),
+                e,
+            )
+            error_code = e.response.get("Error", {}).get("Code")
+            error_message = e.response.get("Error", {}).get("Message")
+            self._update_failed_nodes(set(batch_nodes), error_code)
+            if event_publisher:
+                event_publisher.publish_add_instance_for_nodes_failure_events(error_code, error_message, batch_nodes)
+        except Exception as e:
+            logger.error(
+                "Encountered exception when launching instances for nodes %s: %s",
+                print_with_count(batch_nodes),
+                e,
+            )
+            self._update_failed_nodes(set(batch_nodes))
+            if event_publisher:
+                event_publisher.publish_add_instance_for_nodes_failure_events("Exception", f"{repr(e)}", batch_nodes)
+
+        return []
 
     def _update_slurm_node_addrs(self, slurm_nodes, launched_instances):
         """Update node information in slurm with info from launched EC2 instance."""

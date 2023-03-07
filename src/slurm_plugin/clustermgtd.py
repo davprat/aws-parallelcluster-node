@@ -843,8 +843,11 @@ class ClusterManager:
                 instances_to_terminate, terminate_batch_size=self._config.terminate_max_batch_size
             )
         log.info("Launching new instances for unhealthy static nodes")
-        self._instance_manager.add_instances_for_nodes(
-            node_list, self._config.launch_max_batch_size, self._config.update_node_address
+        successful_nodes = self._instance_manager.add_instances_for_nodes(
+            node_list,
+            self._config.launch_max_batch_size,
+            self._config.update_node_address,
+            event_publisher=self._event_publisher,
         )
         # Add launched nodes to list of nodes being replaced, excluding any nodes that failed to launch
         failed_nodes = set().union(*self._instance_manager.failed_nodes.values())
@@ -854,8 +857,13 @@ class ClusterManager:
             "After node maintenance, following nodes are currently in replacement: %s",
             print_with_count(self._static_nodes_in_replacement),
         )
+
         self._event_publisher.publish_static_nodes_in_replacement(
-            unhealthy_static_nodes, self._static_nodes_in_replacement, self._instance_manager.failed_nodes
+            unhealthy_static_nodes,
+            instances_to_terminate,
+            successful_nodes,
+            self._static_nodes_in_replacement,
+            self._instance_manager.failed_nodes,
         )
 
     @log_exception(log, "maintaining slurm nodes", catch_exception=Exception, raise_on_error=False)

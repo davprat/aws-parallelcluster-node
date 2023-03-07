@@ -196,6 +196,7 @@ def _resume(arg_nodes, resume_config):
         launch_batch_size=resume_config.max_batch_size,
         update_node_address=resume_config.update_node_address,
         all_or_nothing_batch=resume_config.all_or_nothing_batch,
+        event_publisher=_event_publisher,
     )
     failed_nodes = set().union(*instance_manager.failed_nodes.values())
     success_nodes = [node for node in node_list if node not in failed_nodes]

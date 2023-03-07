@@ -158,7 +158,7 @@ def _self_terminate():
     # Sleep for 10 seconds so termination log entries are uploaded to CW logs
     log.info("Preparing to self terminate the instance in 10 seconds!")
     _publish_event(
-        "INFO",
+        "DEBUG",
         "Self terminating instance",
         event_type="node-self-terminate",
     )
@@ -190,15 +190,13 @@ def _is_self_node_down(self_nodename):
                 "WARNING",
                 "Node is incorrectly attached to scheduler",
                 event_type="node-state-not-attached",
-                detail={"node": self_node.description()},
             )
             return True
         log.info("Node is correctly attached to scheduler, not terminating...")
         _publish_event(
-            "INFO",
+            "DEBUG",
             "Node is correctly attached to scheduler",
             event_type="node-state-attached",
-            detail={"node": self_node.description()},
         )
         return False
     except Exception as e:
@@ -243,7 +241,7 @@ def _filter_node_description(node_description: Dict[str, any]):
     return {k: v for k, v in node_description.items() if k in node_description_filter}
 
 
-def _configure_metrics(computemgtd_config, self_node: SlurmNode):
+def _configure_event_publisher(computemgtd_config, self_node: SlurmNode):
     global _publish_event
 
     description = _filter_node_description(self_node.description())
@@ -267,9 +265,9 @@ def _run_computemgtd(config_file):
     reload_config_counter = RELOAD_CONFIG_ITERATIONS
     self_node = _get_nodes_info_with_retry(computemgtd_config.nodename)[0]
 
-    _configure_metrics(computemgtd_config=computemgtd_config, self_node=self_node)
+    _configure_event_publisher(computemgtd_config=computemgtd_config, self_node=self_node)
     _publish_event(
-        "INFO",
+        "DEBUG",
         "Initializing clustermgtd heartbeat",
         event_type="init",
         detail={
@@ -285,7 +283,7 @@ def _run_computemgtd(config_file):
             try:
                 computemgtd_config = _load_daemon_config(config_file)
                 reload_config_counter = RELOAD_CONFIG_ITERATIONS
-                _configure_metrics(computemgtd_config=computemgtd_config)
+                _configure_event_publisher(computemgtd_config=computemgtd_config, self_node=self_node)
             except Exception as e:
                 log.warning("Unable to reload daemon config, using previous one.\nException: %s", e)
                 _publish_event(
@@ -304,7 +302,7 @@ def _run_computemgtd(config_file):
             last_heartbeat = get_clustermgtd_heartbeat(computemgtd_config.clustermgtd_heartbeat_file_path)
             log.info("Latest heartbeat from clustermgtd: %s", last_heartbeat)
             _publish_event(
-                "INFO",
+                "DEBUG",
                 "Last heartbeat from clustermgtd",
                 event_type="heartbeat",
                 detail={

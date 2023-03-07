@@ -3,18 +3,19 @@ from typing import Dict, List
 
 import pytest
 from assertpy import assert_that
-from slurm_plugin.cluster_event_publisher import ClusterEventPublisher
+from slurm_plugin.cluster_event_publisher import ClusterEventPublisher, _expand_slurm_node_spec
 from slurm_plugin.fleet_manager import EC2Instance
 from slurm_plugin.slurm_resources import DynamicNode, StaticNode
 
 
-def event_handler(received_events: List[Dict]):
+def event_handler(received_events: List[Dict], level_filter: List[str] = None):
     def _handler(*args, detail=None, **kwargs):
-        if detail:
-            received_events.append(detail)
-        event_supplier = kwargs.get("event_supplier", [])
-        for event in event_supplier:
-            received_events.append(event.get("detail", None))
+        if not level_filter or args[0] in level_filter:
+            if detail:
+                received_events.append(detail)
+            event_supplier = kwargs.get("event_supplier", [])
+            for event in event_supplier:
+                received_events.append(event.get("detail", None))
 
     return _handler
 
@@ -1218,7 +1219,7 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                     "nodehostname",
                     "COMPLETING+DRAIN",
                     "queue1",
-                    "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes [root@2023-01-31T21:24:55]",
+                    "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes",
                 ),
                 StaticNode(
                     "queue2-dy-c5large-1",
@@ -1226,7 +1227,7 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                     "nodehostname",
                     "DOWN+CLOUD",
                     "queue2",
-                    "(Code:InsufficientHostCapacity)Failure when resuming nodes [root@2023-01-31T21:24:55]",
+                    "(Code:InsufficientHostCapacity)Failure when resuming nodes",
                 ),
                 StaticNode(
                     "queue2-dy-c5large-2",
@@ -1234,8 +1235,7 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                     "nodehostname",
                     "DOWN+CLOUD",
                     "queue2",
-                    "(Code:InsufficientHostCapacity)Temporarily disabling node due to insufficient capacity "
-                    "[root@2023-01-31T21:24:55]",
+                    "(Code:InsufficientHostCapacity)Error",
                 ),
                 StaticNode(
                     "queue2-dy-c5large-3",
@@ -1243,8 +1243,7 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                     "nodehostname",
                     "DOWN+CLOUD",
                     "queue2",
-                    "(Code:UnauthorizedOperation)Temporarily disabling node due to insufficient capacity "
-                    "[root@2023-01-31T21:24:55]",
+                    "(Code:UnauthorizedOperation)Error",
                 ),
                 StaticNode(
                     "queue2-dy-c5large-4",
@@ -1252,8 +1251,7 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                     "nodehostname",
                     "DOWN+CLOUD",
                     "queue2",
-                    "(Code:InvalidBlockDeviceMapping)Temporarily disabling node due to insufficient capacity "
-                    "[root@2023-01-31T21:24:55]",
+                    "(Code:InvalidBlockDeviceMapping)Error",
                 ),
                 StaticNode(
                     "queue2-dy-c5large-5",
@@ -1261,8 +1259,7 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                     "nodehostname",
                     "DOWN+CLOUD",
                     "queue2",
-                    "(Code:AccessDeniedException)Temporarily disabling node due to insufficient capacity "
-                    "[root@2023-01-31T21:24:55]",
+                    "(Code:AccessDeniedException)Error",
                 ),
                 StaticNode(
                     "queue2-dy-c5large-6",
@@ -1270,8 +1267,7 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                     "nodehostname",
                     "DOWN+CLOUD",
                     "queue2",
-                    "(Code:VcpuLimitExceeded)Temporarily disabling node due to insufficient capacity "
-                    "[root@2023-01-31T21:24:55]",
+                    "(Code:VcpuLimitExceeded)Error",
                 ),
                 StaticNode(
                     "queue2-dy-c5large-8",
@@ -1279,8 +1275,7 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                     "nodehostname",
                     "DOWN+CLOUD",
                     "queue2",
-                    "(Code:VolumeLimitExceeded)Temporarily disabling node due to insufficient capacity "
-                    "[root@2023-01-31T21:24:55]",
+                    "(Code:VolumeLimitExceeded)Error",
                 ),
                 StaticNode(
                     "queue2-dy-c5large-8",
@@ -1288,11 +1283,151 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                     "nodehostname",
                     "DOWN+CLOUD",
                     "queue2",
-                    "(Code:InsufficientVolumeCapacity)Temporarily disabling node due to insufficient capacity "
-                    "[root@2023-01-31T21:24:55]",
+                    "(Code:InsufficientVolumeCapacity)Error",
                 ),
             ],
             [
+                {
+                    "count": 13,
+                    "nodes": [
+                        {
+                            "name": "queue1-dy-c5xlarge-2",
+                            "id": "i-id-0",
+                            "ip": "1.2.3.0",
+                            "error-code": None,
+                            "reason": None,
+                        },
+                        {
+                            "name": "queue-dy-c5xlarge-1",
+                            "id": "i-id-1",
+                            "ip": "1.2.3.1",
+                            "error-code": None,
+                            "reason": None,
+                        },
+                        {
+                            "name": "queue1-dy-c5xlarge-1",
+                            "id": "i-id-2",
+                            "ip": "1.2.3.2",
+                            "error-code": None,
+                            "reason": None,
+                        },
+                        {
+                            "name": "queue1-dy-c4xlarge-1",
+                            "id": "i-id-3",
+                            "ip": "1.2.3.3",
+                            "error-code": None,
+                            "reason": None,
+                        },
+                        {
+                            "name": "queue1-dy-c5xlarge-3",
+                            "id": "i-id-4",
+                            "ip": "1.2.3.4",
+                            "error-code": "InsufficientReservedInstanceCapacity",
+                            "reason": "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes",
+                        },
+                        {
+                            "name": "queue2-dy-c5large-1",
+                            "id": "i-id-5",
+                            "ip": "1.2.3.5",
+                            "error-code": "InsufficientHostCapacity",
+                            "reason": "(Code:InsufficientHostCapacity)Failure when resuming nodes",
+                        },
+                        {
+                            "name": "queue2-dy-c5large-2",
+                            "id": "i-id-6",
+                            "ip": "1.2.3.6",
+                            "error-code": "InsufficientHostCapacity",
+                            "reason": "(Code:InsufficientHostCapacity)Error",
+                        },
+                        {
+                            "name": "queue2-dy-c5large-3",
+                            "id": "i-id-7",
+                            "ip": "1.2.3.7",
+                            "error-code": "UnauthorizedOperation",
+                            "reason": "(Code:UnauthorizedOperation)Error",
+                        },
+                        {
+                            "name": "queue2-dy-c5large-4",
+                            "id": "i-id-8",
+                            "ip": "1.2.3.8",
+                            "error-code": "InvalidBlockDeviceMapping",
+                            "reason": "(Code:InvalidBlockDeviceMapping)Error",
+                        },
+                        {
+                            "name": "queue2-dy-c5large-5",
+                            "id": "i-id-9",
+                            "ip": "1.2.3.9",
+                            "error-code": "AccessDeniedException",
+                            "reason": "(Code:AccessDeniedException)Error",
+                        },
+                        {
+                            "name": "queue2-dy-c5large-6",
+                            "id": "i-id-10",
+                            "ip": "1.2.3.10",
+                            "error-code": "VcpuLimitExceeded",
+                            "reason": "(Code:VcpuLimitExceeded)Error",
+                        },
+                        {
+                            "name": "queue2-dy-c5large-8",
+                            "id": "i-id-11",
+                            "ip": "1.2.3.11",
+                            "error-code": "VolumeLimitExceeded",
+                            "reason": "(Code:VolumeLimitExceeded)Error",
+                        },
+                        {
+                            "name": "queue2-dy-c5large-8",
+                            "id": "i-id-12",
+                            "ip": "1.2.3.12",
+                            "error-code": "InsufficientVolumeCapacity",
+                            "reason": "(Code:InsufficientVolumeCapacity)Error",
+                        },
+                    ],
+                },
+                {
+                    "count": 4,
+                    "nodes": [
+                        {"name": "queue1-dy-c5xlarge-2", "id": "i-id-0", "ip": "1.2.3.0"},
+                        {"name": "queue-dy-c5xlarge-1", "id": "i-id-1", "ip": "1.2.3.1"},
+                        {"name": "queue1-dy-c5xlarge-1", "id": "i-id-2", "ip": "1.2.3.2"},
+                        {"name": "queue1-dy-c4xlarge-1", "id": "i-id-3", "ip": "1.2.3.3"},
+                    ],
+                },
+                {
+                    "node": {"name": "queue1-dy-c5xlarge-2"},
+                    "instance": {
+                        "id": "i-id-0",
+                        "private-ip": "1.2.3.0",
+                        "hostname": "host-0",
+                        "launch-time": "sometime",
+                    },
+                },
+                {
+                    "node": {"name": "queue-dy-c5xlarge-1"},
+                    "instance": {
+                        "id": "i-id-1",
+                        "private-ip": "1.2.3.1",
+                        "hostname": "host-1",
+                        "launch-time": "sometime",
+                    },
+                },
+                {
+                    "node": {"name": "queue1-dy-c5xlarge-1"},
+                    "instance": {
+                        "id": "i-id-2",
+                        "private-ip": "1.2.3.2",
+                        "hostname": "host-2",
+                        "launch-time": "sometime",
+                    },
+                },
+                {
+                    "node": {"name": "queue1-dy-c4xlarge-1"},
+                    "instance": {
+                        "id": "i-id-3",
+                        "private-ip": "1.2.3.3",
+                        "hostname": "host-3",
+                        "launch-time": "sometime",
+                    },
+                },
                 {
                     "count": 13,
                     "nodes": [
@@ -1323,7 +1458,12 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue1",
                         "compute-resource": "c5xlarge",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-0",
+                            "private-ip": "1.2.3.0",
+                            "hostname": "host-0",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
@@ -1344,7 +1484,12 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue",
                         "compute-resource": "c5xlarge",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-1",
+                            "private-ip": "1.2.3.1",
+                            "hostname": "host-1",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
@@ -1365,7 +1510,12 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue1",
                         "compute-resource": "c5xlarge",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-2",
+                            "private-ip": "1.2.3.2",
+                            "hostname": "host-2",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
@@ -1386,7 +1536,12 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue1",
                         "compute-resource": "c4xlarge",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-3",
+                            "private-ip": "1.2.3.3",
+                            "hostname": "host-3",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
@@ -1407,14 +1562,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue1",
                         "compute-resource": "c5xlarge",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-4",
+                            "private-ip": "1.2.3.4",
+                            "hostname": "host-4",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": True,
                         "error-code": "InsufficientReservedInstanceCapacity",
-                        "reason": "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes "
-                        "[root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes",
                     }
                 },
                 {
@@ -1429,14 +1588,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue2",
                         "compute-resource": "c5large",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-5",
+                            "private-ip": "1.2.3.5",
+                            "hostname": "host-5",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
                         "error-code": "InsufficientHostCapacity",
-                        "reason": "(Code:InsufficientHostCapacity)Failure when resuming nodes "
-                        "[root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InsufficientHostCapacity)Failure when resuming nodes",
                     }
                 },
                 {
@@ -1451,14 +1614,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue2",
                         "compute-resource": "c5large",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-6",
+                            "private-ip": "1.2.3.6",
+                            "hostname": "host-6",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
                         "error-code": "InsufficientHostCapacity",
-                        "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node due to insufficient "
-                        "capacity [root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InsufficientHostCapacity)Error",
                     }
                 },
                 {
@@ -1473,14 +1640,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue2",
                         "compute-resource": "c5large",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-7",
+                            "private-ip": "1.2.3.7",
+                            "hostname": "host-7",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
                         "error-code": "UnauthorizedOperation",
-                        "reason": "(Code:UnauthorizedOperation)Temporarily disabling node due to insufficient capacity "
-                        "[root@2023-01-31T21:24:55]",
+                        "reason": "(Code:UnauthorizedOperation)Error",
                     }
                 },
                 {
@@ -1495,14 +1666,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue2",
                         "compute-resource": "c5large",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-8",
+                            "private-ip": "1.2.3.8",
+                            "hostname": "host-8",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
                         "error-code": "InvalidBlockDeviceMapping",
-                        "reason": "(Code:InvalidBlockDeviceMapping)Temporarily disabling node due to insufficient "
-                        "capacity [root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InvalidBlockDeviceMapping)Error",
                     }
                 },
                 {
@@ -1517,14 +1692,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue2",
                         "compute-resource": "c5large",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-9",
+                            "private-ip": "1.2.3.9",
+                            "hostname": "host-9",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
                         "error-code": "AccessDeniedException",
-                        "reason": "(Code:AccessDeniedException)Temporarily disabling node due to insufficient capacity "
-                        "[root@2023-01-31T21:24:55]",
+                        "reason": "(Code:AccessDeniedException)Error",
                     }
                 },
                 {
@@ -1539,14 +1718,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue2",
                         "compute-resource": "c5large",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-10",
+                            "private-ip": "1.2.3.10",
+                            "hostname": "host-10",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
                         "error-code": "VcpuLimitExceeded",
-                        "reason": "(Code:VcpuLimitExceeded)Temporarily disabling node due to insufficient capacity "
-                        "[root@2023-01-31T21:24:55]",
+                        "reason": "(Code:VcpuLimitExceeded)Error",
                     }
                 },
                 {
@@ -1561,14 +1744,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue2",
                         "compute-resource": "c5large",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-11",
+                            "private-ip": "1.2.3.11",
+                            "hostname": "host-11",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
                         "error-code": "VolumeLimitExceeded",
-                        "reason": "(Code:VolumeLimitExceeded)Temporarily disabling node due to insufficient capacity "
-                        "[root@2023-01-31T21:24:55]",
+                        "reason": "(Code:VolumeLimitExceeded)Error",
                     }
                 },
                 {
@@ -1583,14 +1770,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue2",
                         "compute-resource": "c5large",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-12",
+                            "private-ip": "1.2.3.12",
+                            "hostname": "host-12",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
                         "error-code": "InsufficientVolumeCapacity",
-                        "reason": "(Code:InsufficientVolumeCapacity)Temporarily disabling node due to insufficient "
-                        "capacity [root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InsufficientVolumeCapacity)Error",
                     }
                 },
                 {
@@ -1626,14 +1817,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue1",
                         "compute-resource": "c5xlarge",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-4",
+                            "private-ip": "1.2.3.4",
+                            "hostname": "host-4",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": True,
                         "error-code": "InsufficientReservedInstanceCapacity",
-                        "reason": "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes "
-                        "[root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InsufficientReservedInstanceCapacity)Failure when resuming nodes",
                     },
                     "error-code": "InsufficientReservedInstanceCapacity",
                     "failure-type": "ice-failures",
@@ -1650,14 +1845,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue2",
                         "compute-resource": "c5large",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-5",
+                            "private-ip": "1.2.3.5",
+                            "hostname": "host-5",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
                         "error-code": "InsufficientHostCapacity",
-                        "reason": "(Code:InsufficientHostCapacity)Failure when resuming nodes "
-                        "[root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InsufficientHostCapacity)Failure when resuming nodes",
                     },
                     "error-code": "InsufficientHostCapacity",
                     "failure-type": "ice-failures",
@@ -1674,14 +1873,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue2",
                         "compute-resource": "c5large",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-6",
+                            "private-ip": "1.2.3.6",
+                            "hostname": "host-6",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
                         "error-code": "InsufficientHostCapacity",
-                        "reason": "(Code:InsufficientHostCapacity)Temporarily disabling node due to insufficient "
-                        "capacity [root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InsufficientHostCapacity)Error",
                     },
                     "error-code": "InsufficientHostCapacity",
                     "failure-type": "ice-failures",
@@ -1698,14 +1901,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue2",
                         "compute-resource": "c5large",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-7",
+                            "private-ip": "1.2.3.7",
+                            "hostname": "host-7",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
                         "error-code": "UnauthorizedOperation",
-                        "reason": "(Code:UnauthorizedOperation)Temporarily disabling node due to insufficient capacity "
-                        "[root@2023-01-31T21:24:55]",
+                        "reason": "(Code:UnauthorizedOperation)Error",
                     },
                     "error-code": "UnauthorizedOperation",
                     "failure-type": "iam-policy-errors",
@@ -1722,14 +1929,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue2",
                         "compute-resource": "c5large",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-8",
+                            "private-ip": "1.2.3.8",
+                            "hostname": "host-8",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
                         "error-code": "InvalidBlockDeviceMapping",
-                        "reason": "(Code:InvalidBlockDeviceMapping)Temporarily disabling node due to insufficient "
-                        "capacity [root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InvalidBlockDeviceMapping)Error",
                     },
                     "error-code": "InvalidBlockDeviceMapping",
                     "failure-type": "custom-ami-errors",
@@ -1746,14 +1957,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue2",
                         "compute-resource": "c5large",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-9",
+                            "private-ip": "1.2.3.9",
+                            "hostname": "host-9",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
                         "error-code": "AccessDeniedException",
-                        "reason": "(Code:AccessDeniedException)Temporarily disabling node due to insufficient capacity "
-                        "[root@2023-01-31T21:24:55]",
+                        "reason": "(Code:AccessDeniedException)Error",
                     },
                     "error-code": "AccessDeniedException",
                     "failure-type": "iam-policy-errors",
@@ -1770,14 +1985,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue2",
                         "compute-resource": "c5large",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-10",
+                            "private-ip": "1.2.3.10",
+                            "hostname": "host-10",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
                         "error-code": "VcpuLimitExceeded",
-                        "reason": "(Code:VcpuLimitExceeded)Temporarily disabling node due to insufficient capacity "
-                        "[root@2023-01-31T21:24:55]",
+                        "reason": "(Code:VcpuLimitExceeded)Error",
                     },
                     "error-code": "VcpuLimitExceeded",
                     "failure-type": "vcpu-limit-failures",
@@ -1794,14 +2013,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue2",
                         "compute-resource": "c5large",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-11",
+                            "private-ip": "1.2.3.11",
+                            "hostname": "host-11",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
                         "error-code": "VolumeLimitExceeded",
-                        "reason": "(Code:VolumeLimitExceeded)Temporarily disabling node due to insufficient capacity "
-                        "[root@2023-01-31T21:24:55]",
+                        "reason": "(Code:VolumeLimitExceeded)Error",
                     },
                     "error-code": "VolumeLimitExceeded",
                     "failure-type": "volume-limit-failures",
@@ -1818,14 +2041,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue2",
                         "compute-resource": "c5large",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-12",
+                            "private-ip": "1.2.3.12",
+                            "hostname": "host-12",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
                         "error-code": "InsufficientVolumeCapacity",
-                        "reason": "(Code:InsufficientVolumeCapacity)Temporarily disabling node due to insufficient "
-                        "capacity [root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InsufficientVolumeCapacity)Error",
                     },
                     "error-code": "VolumeLimitExceeded",
                     "failure-type": "volume-limit-failures",
@@ -1842,14 +2069,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue2",
                         "compute-resource": "c5large",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-11",
+                            "private-ip": "1.2.3.11",
+                            "hostname": "host-11",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
                         "error-code": "VolumeLimitExceeded",
-                        "reason": "(Code:VolumeLimitExceeded)Temporarily disabling node due to insufficient capacity "
-                        "[root@2023-01-31T21:24:55]",
+                        "reason": "(Code:VolumeLimitExceeded)Error",
                     },
                     "error-code": "InsufficientVolumeCapacity",
                     "failure-type": "volume-limit-failures",
@@ -1866,14 +2097,18 @@ def test_publish_unhealthy_static_node_events(test_nodes, expected_details):
                         "queue-name": "queue2",
                         "compute-resource": "c5large",
                         "node-type": "dy",
-                        "instance": "None",
+                        "instance": {
+                            "id": "i-id-12",
+                            "private-ip": "1.2.3.12",
+                            "hostname": "host-12",
+                            "launch-time": "sometime",
+                        },
                         "slurmd-start-time": None,
                         "up-time": 0,
                         "idle-time": 0,
                         "is-running-job": False,
                         "error-code": "InsufficientVolumeCapacity",
-                        "reason": "(Code:InsufficientVolumeCapacity)Temporarily disabling node due to insufficient "
-                        "capacity [root@2023-01-31T21:24:55]",
+                        "reason": "(Code:InsufficientVolumeCapacity)Error",
                     },
                     "error-code": "InsufficientVolumeCapacity",
                     "failure-type": "volume-limit-failures",
@@ -1886,14 +2121,32 @@ def test_publish_static_nodes_in_replacement(test_nodes, expected_details):
     received_events = []
     event_publisher = ClusterEventPublisher(event_handler(received_events))
 
+    instances = [
+        EC2Instance(f"i-id-{instance_id}", f"1.2.3.{instance_id}", f"host-{instance_id}", "sometime")
+        for instance_id in range(len(test_nodes))
+    ]
+
+    nodes_and_instances = zip(test_nodes, instances)
+
+    for node, instance in nodes_and_instances:
+        node.instance = instance
+
     nodes_in_replacement = [node.name for node in test_nodes]
     failed_nodes = {}
     for node in test_nodes:
         if node.error_code:
             failed_nodes.setdefault(node.error_code, []).append(node.name)
 
+    success_nodes = [(node.name, node.instance) for node in test_nodes if not node.error_code and node.instance]
+
     # Run test
-    event_publisher.publish_static_nodes_in_replacement(test_nodes, nodes_in_replacement, failed_nodes)
+    event_publisher.publish_static_nodes_in_replacement(
+        test_nodes,
+        [node.instance.id for node in test_nodes if node.instance],
+        success_nodes,
+        nodes_in_replacement,
+        failed_nodes,
+    )
 
     # Assert calls
     assert_that(received_events).is_length(len(expected_details))
@@ -2763,11 +3016,11 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
                 {
                     "count": 5,
                     "nodes": [
-                        {"name": "node-id-2", "id": "id-2"},
-                        {"name": "node-id-1", "id": "id-1"},
-                        {"name": "node-id-2", "id": "id-2"},
-                        {"name": "node-id-5", "id": "id-5"},
-                        {"name": "node-id-6", "id": "id-6"},
+                        {"name": "node-id-2", "id": "id-2", "ip": "ip-2"},
+                        {"name": "node-id-1", "id": "id-1", "ip": "ip-1"},
+                        {"name": "node-id-2", "id": "id-2", "ip": "ip-4"},
+                        {"name": "node-id-5", "id": "id-5", "ip": "ip-5"},
+                        {"name": "node-id-6", "id": "id-6", "ip": "ip-6"},
                     ],
                 },
                 {
@@ -2975,11 +3228,11 @@ def test_publish_failed_health_check_nodes_in_replacement(test_nodes, expected_d
                 {
                     "count": 5,
                     "nodes": [
-                        {"name": "node-id-2", "id": "id-2"},
-                        {"name": "node-id-1", "id": "id-1"},
-                        {"name": "node-id-2", "id": "id-2"},
-                        {"name": "node-id-5", "id": "id-5"},
-                        {"name": "node-id-6", "id": "id-6"},
+                        {"name": "node-id-2", "id": "id-2", "ip": "ip-2"},
+                        {"name": "node-id-1", "id": "id-1", "ip": "ip-1"},
+                        {"name": "node-id-2", "id": "id-2", "ip": "ip-4"},
+                        {"name": "node-id-5", "id": "id-5", "ip": "ip-5"},
+                        {"name": "node-id-6", "id": "id-6", "ip": "ip-6"},
                     ],
                 },
                 {
@@ -3053,3 +3306,201 @@ def test_publish_node_launch_events(test_instances, failed_nodes, expected_detai
     assert_that(received_events).is_length(len(expected_details))
     for received_event, expected_detail in zip(received_events, expected_details):
         assert_that(received_event).is_equal_to(expected_detail)
+
+
+@pytest.mark.parametrize(
+    "test_instances, expected_details",
+    [
+        (
+            [
+                EC2Instance("id-2", "ip-2", "hostname", "some_launch_time"),
+                # Setting launch time here for instance for static node to trigger replacement timeout
+                EC2Instance("id-1", "ip-1", "hostname", datetime(2020, 1, 1, 0, 0, 0)),
+                EC2Instance("id-2", "ip-4", "hostname", datetime(2020, 1, 1, 0, 0, 0)),
+                EC2Instance("id-5", "ip-5", "hostname", "some_launch_time"),
+                EC2Instance("id-6", "ip-6", "hostname", "some_launch_time"),
+            ],
+            [
+                {
+                    "count": 5,
+                    "nodes": [
+                        {"name": "node-id-2", "id": "id-2", "ip": "ip-2"},
+                        {"name": "node-id-1", "id": "id-1", "ip": "ip-1"},
+                        {"name": "node-id-2", "id": "id-2", "ip": "ip-4"},
+                        {"name": "node-id-5", "id": "id-5", "ip": "ip-5"},
+                        {"name": "node-id-6", "id": "id-6", "ip": "ip-6"},
+                    ],
+                }
+            ],
+        )
+    ],
+)
+def test_publish_add_instance_for_nodes_success_events(test_instances, expected_details):
+    received_events = []
+    event_publisher = ClusterEventPublisher(event_handler(received_events))
+
+    successful_nodes = [(f"node-{instance.id}", instance) for instance in test_instances]
+
+    # Run test
+    event_publisher.publish_add_instance_for_nodes_success_events(successful_nodes)
+
+    # Assert calls
+    assert_that(received_events).is_length(len(expected_details))
+    for received_event, expected_detail in zip(received_events, expected_details):
+        assert_that(received_event).is_equal_to(expected_detail)
+
+
+@pytest.mark.parametrize(
+    "error_code, error_message, failed_nodes, expected_details",
+    [
+        (
+            "ItDidNotWork",
+            "Your call failed",
+            [
+                "ab-dy-1",
+                "ab-dy-2",
+                "ab-dy-3",
+                "ab-dy-4",
+            ],
+            [
+                {
+                    "count": 4,
+                    "error-code": "ItDidNotWork",
+                    "error-message": "Your call failed",
+                    "nodes": [{"name": "ab-dy-1"}, {"name": "ab-dy-2"}, {"name": "ab-dy-3"}, {"name": "ab-dy-4"}],
+                }
+            ],
+        )
+    ],
+)
+def test_publish_add_instance_for_nodes_failure_events(error_code, error_message, failed_nodes, expected_details):
+    received_events = []
+    event_publisher = ClusterEventPublisher(event_handler(received_events))
+
+    # Run test
+    event_publisher.publish_add_instance_for_nodes_failure_events(error_code, error_message, failed_nodes)
+
+    # Assert calls
+    assert_that(received_events).is_length(len(expected_details))
+    for received_event, expected_detail in zip(received_events, expected_details):
+        assert_that(received_event).is_equal_to(expected_detail)
+
+
+@pytest.mark.parametrize(
+    "node_spec, expected_node_list",
+    [
+        (
+            "",
+            [],
+        ),
+        (
+            "queue1-dy-c5_xlarge-1",
+            [
+                "queue1-dy-c5_xlarge-1",
+            ],
+        ),
+        (
+            "queue1-dy-c5_xlarge-[1-3]",
+            [
+                "queue1-dy-c5_xlarge-1",
+                "queue1-dy-c5_xlarge-2",
+                "queue1-dy-c5_xlarge-3",
+            ],
+        ),
+        (
+            "queue1-dy-c5_xlarge-1,queue1-dy-c5_xlarge-2,queue1-dy-c5_xlarge-3",
+            [
+                "queue1-dy-c5_xlarge-1",
+                "queue1-dy-c5_xlarge-2",
+                "queue1-dy-c5_xlarge-3",
+            ],
+        ),
+        (
+            "queue1-dy-c5_xlarge-[1-2,4,6,8-9]",
+            [
+                "queue1-dy-c5_xlarge-1",
+                "queue1-dy-c5_xlarge-2",
+                "queue1-dy-c5_xlarge-4",
+                "queue1-dy-c5_xlarge-6",
+                "queue1-dy-c5_xlarge-8",
+                "queue1-dy-c5_xlarge-9",
+            ],
+        ),
+        (
+            "queue1-dy-c5_xlarge-[1-2,4,6,8-9],queue1-dy-c6_xlarge-6",
+            [
+                "queue1-dy-c5_xlarge-1",
+                "queue1-dy-c5_xlarge-2",
+                "queue1-dy-c5_xlarge-4",
+                "queue1-dy-c5_xlarge-6",
+                "queue1-dy-c5_xlarge-8",
+                "queue1-dy-c5_xlarge-9",
+                "queue1-dy-c6_xlarge-6",
+            ],
+        ),
+        (
+            "queue1-dy-c5_xlarge-[1-2,4,6,8-9],queue1-dy-c6_xlarge-[1,4-6,8]",
+            [
+                "queue1-dy-c5_xlarge-1",
+                "queue1-dy-c5_xlarge-2",
+                "queue1-dy-c5_xlarge-4",
+                "queue1-dy-c5_xlarge-6",
+                "queue1-dy-c5_xlarge-8",
+                "queue1-dy-c5_xlarge-9",
+                "queue1-dy-c6_xlarge-1",
+                "queue1-dy-c6_xlarge-4",
+                "queue1-dy-c6_xlarge-5",
+                "queue1-dy-c6_xlarge-6",
+                "queue1-dy-c6_xlarge-8",
+            ],
+        ),
+        (
+            "queue1-dy-c6_xlarge-2,queue1-dy-c5_xlarge-[1-2,4,6,8-9],queue1-dy-c6_xlarge-6",
+            [
+                "queue1-dy-c6_xlarge-2",
+                "queue1-dy-c5_xlarge-1",
+                "queue1-dy-c5_xlarge-2",
+                "queue1-dy-c5_xlarge-4",
+                "queue1-dy-c5_xlarge-6",
+                "queue1-dy-c5_xlarge-8",
+                "queue1-dy-c5_xlarge-9",
+                "queue1-dy-c6_xlarge-6",
+            ],
+        ),
+    ],
+    ids=[
+        "empty",
+        "simple_name",
+        "simple_range",
+        "multiple_simple_names",
+        "range_with_gaps",
+        "range_and_simple_names",
+        "mutliple_ranges",
+        "mixed_simple_and_ranged",
+    ],
+)
+def test_expand_slurm_node_spec(node_spec, expected_node_list):
+    actual_node_list = list(_expand_slurm_node_spec(node_spec))
+    assert_that(actual_node_list).is_length(len(expected_node_list))
+    for node_name in expected_node_list:
+        assert_that(actual_node_list).contains(node_name)
+
+
+@pytest.mark.parametrize(
+    "bad_input",
+    [
+        ",queue1-dy-c5_xlarge-[1-2,4,6,8-9],queue1-dy-c6_xlarge-6",
+        "queue1-dy-c5_xlarge-[1-,4,6,8-9],queue1-dy-c6_xlarge-6",
+        "queue1-dy-c5_xlarge-[-2,4,6,8-9],queue1-dy-c6_xlarge-6",
+        "queue1-dy-c5_xlarge-[-2,4,6,8-9,queue1-dy-c6_xlarge-6",
+        "queue1-dy-c5_xlarge-[-2,4,6,8-9],queue1-dy-c6_xlarge-6]",
+        "queue1-dy-c5_xlarge-[1-2,4,6,8-9,queue1-dy-c6_xlarge-6]",
+        "queue1-dy-c5_xlarge-[1-2,4,6,8-9,queue1]",
+        "queue1-dy-c5_xlarge-[1-3-8]",
+        "queue1-dy-c5_xlarge-[2-1]",
+        "queue1-dy-c5_xlarge-1,,queue1-dy-c5_xlarge-2",
+    ],
+)
+def test_expand_slurm_node_spec_raises_on_bad_input(bad_input):
+    result = _expand_slurm_node_spec(bad_input)
+    assert_that(list).raises(Exception).when_called_with(result)

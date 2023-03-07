@@ -11,13 +11,14 @@
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Iterable
+from typing import Dict, Iterable, List
 from unittest.mock import call
 
 import botocore
 import pytest
 import slurm_plugin
 from assertpy import assert_that
+from slurm_plugin.cluster_event_publisher import ClusterEventPublisher
 from slurm_plugin.fleet_manager import EC2Instance
 from slurm_plugin.instance_manager import InstanceManager
 from slurm_plugin.slurm_resources import (
@@ -78,6 +79,7 @@ class TestInstanceManager:
             "launched_instances",
             "expected_failed_nodes",
             "expected_update_nodes_calls",
+            "expected_events",
         ),
         [
             # normal
@@ -156,6 +158,7 @@ class TestInstanceManager:
                         ],
                     ),
                 ],
+                [],
             ),
             # client_error
             (
@@ -219,6 +222,14 @@ class TestInstanceManager:
                         ],
                     ),
                 ],
+                [
+                    {
+                        "count": 1,
+                        "error-code": "some_error_code",
+                        "error-message": None,
+                        "nodes": [{"name": "queue1-st-c52xlarge-1"}],
+                    }
+                ],
             ),
             # no_update
             (
@@ -241,6 +252,7 @@ class TestInstanceManager:
                 ],
                 {},
                 None,
+                [],
             ),
             # batch_size1
             (
@@ -284,6 +296,24 @@ class TestInstanceManager:
                         ["queue1-st-c5xlarge-2"],
                         [EC2Instance("i-12345", "ip.1.0.0.1", "ip-1-0-0-1", datetime(2020, 1, 1, tzinfo=timezone.utc))],
                     )
+                ],
+                [
+                    {
+                        "count": 1,
+                        "error-code": "InsufficientHostCapacity",
+                        "error-message": None,
+                        "nodes": [{"name": "queue1-st-c52xlarge-1"}],
+                    },
+                    {
+                        "count": 3,
+                        "error-code": "ServiceUnavailable",
+                        "error-message": None,
+                        "nodes": [
+                            {"name": "queue2-st-c5xlarge-1"},
+                            {"name": "queue2-st-c5xlarge-2"},
+                            {"name": "queue2-dy-c5xlarge-1"},
+                        ],
+                    },
                 ],
             ),
             # batch_size2
@@ -356,6 +386,20 @@ class TestInstanceManager:
                         [EC2Instance("i-45678", "ip.1.0.0.4", "ip-1-0-0-4", datetime(2020, 1, 1, tzinfo=timezone.utc))],
                     ),
                 ],
+                [
+                    {
+                        "count": 1,
+                        "error-code": "InsufficientVolumeCapacity",
+                        "error-message": None,
+                        "nodes": [{"name": "queue1-st-c52xlarge-1"}],
+                    },
+                    {
+                        "count": 1,
+                        "error-code": "InternalError",
+                        "error-message": None,
+                        "nodes": [{"name": "queue2-st-c5xlarge-2"}],
+                    },
+                ],
             ),
             # partial_launch
             (
@@ -393,6 +437,7 @@ class TestInstanceManager:
                         [EC2Instance("i-45678", "ip.1.0.0.4", "ip-1-0-0-4", datetime(2020, 1, 1, tzinfo=timezone.utc))],
                     )
                 ],
+                [],
             ),
             # all_or_nothing
             (
@@ -454,6 +499,14 @@ class TestInstanceManager:
                             ),
                         ],
                     )
+                ],
+                [
+                    {
+                        "count": 2,
+                        "error-code": "InsufficientInstanceCapacity",
+                        "error-message": None,
+                        "nodes": [{"name": "queue2-dy-c5xlarge-2"}, {"name": "queue2-dy-c5xlarge-3"}],
+                    }
                 ],
             ),
             # override_runinstances
@@ -548,6 +601,7 @@ class TestInstanceManager:
                         ],
                     ),
                 ],
+                [],
             ),
         ],
         ids=[
@@ -573,7 +627,19 @@ class TestInstanceManager:
         expected_update_nodes_calls,
         mocker,
         instance_manager,
+        expected_events,
     ):
+        def event_handler(received_events: List[Dict], level_filter: List[str] = None):
+            def _handler(*args, detail=None, **kwargs):
+                if not level_filter or args[0] in level_filter:
+                    if detail:
+                        received_events.append(detail)
+                    event_supplier = kwargs.get("event_supplier", [])
+                    for event in event_supplier:
+                        received_events.append(event.get("detail", None))
+
+            return _handler
+
         mocker.patch("slurm_plugin.instance_manager.update_nodes")
 
         # patch internal functions
@@ -591,12 +657,18 @@ class TestInstanceManager:
             side_effect=launched_instances,
         )
 
+        received_events = []
+        event_publisher = ClusterEventPublisher(
+            event_handler(received_events, level_filter=["ERROR", "WARNING", "INFO"])
+        )
+
         # run test
         instance_manager.add_instances_for_nodes(
             node_list=["placeholder_node_list"],
             launch_batch_size=launch_batch_size,
             update_node_address=update_node_address,
             all_or_nothing_batch=all_or_nothing_batch,
+            event_publisher=event_publisher,
         )
         if expected_update_nodes_calls:
             instance_manager._update_slurm_node_addrs.assert_has_calls(expected_update_nodes_calls)
@@ -606,6 +678,10 @@ class TestInstanceManager:
             assert_that(instance_manager.failed_nodes).is_equal_to(expected_failed_nodes)
         else:
             assert_that(instance_manager.failed_nodes).is_empty()
+
+        assert_that(received_events).is_length(len(expected_events))
+        for received_event, expected_detail in zip(received_events, expected_events):
+            assert_that(received_event).is_equal_to(expected_detail)
 
     @pytest.mark.parametrize(
         (
