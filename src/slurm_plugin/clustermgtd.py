@@ -769,6 +769,8 @@ class ClusterManager:
         Setting node to down will let slurm requeue jobs allocated to node.
         Setting node to power_down will terminate backing instance and reset dynamic node for future use.
         """
+        unhealthy_dynamic_nodes = list(unhealthy_dynamic_nodes)
+
         instances_to_terminate = [node.instance.id for node in unhealthy_dynamic_nodes if node.instance]
         if instances_to_terminate:
             log.info("Terminating instances that are backing unhealthy dynamic nodes")
@@ -780,7 +782,9 @@ class ClusterManager:
         power_down_nodes = [node.name for node in unhealthy_dynamic_nodes]
         set_nodes_power_down(power_down_nodes, reason="Scheduler health check failed")
 
-        self._event_publisher.publish_unhealthy_dynamic_node_action_events(instances_to_terminate, power_down_nodes)
+        self._event_publisher.publish_unhealthy_dynamic_node_events(
+            unhealthy_dynamic_nodes, instances_to_terminate, power_down_nodes
+        )
 
     def _find_powering_down_nodes(self, slurm_nodes):
         return [node for node in slurm_nodes if node.is_powering_down_with_nodeaddr() and not node.is_being_replaced]
@@ -858,7 +862,7 @@ class ClusterManager:
             print_with_count(self._static_nodes_in_replacement),
         )
 
-        self._event_publisher.publish_static_nodes_in_replacement(
+        self._event_publisher.publish_unhealthy_static_node_events(
             unhealthy_static_nodes,
             instances_to_terminate,
             successful_nodes,
@@ -893,13 +897,10 @@ class ClusterManager:
             ice_compute_resources_and_nodes_map,
         ) = self._find_unhealthy_slurm_nodes(active_nodes)
 
-        unhealthy_dynamic_nodes = list(unhealthy_dynamic_nodes)
-        self._event_publisher.publish_unhealthy_dynamic_node_events(unhealthy_dynamic_nodes)
         if unhealthy_dynamic_nodes:
             log.info("Found the following unhealthy dynamic nodes: %s", print_with_count(unhealthy_dynamic_nodes))
             self._handle_unhealthy_dynamic_nodes(unhealthy_dynamic_nodes)
 
-        self._event_publisher.publish_unhealthy_static_node_events(unhealthy_static_nodes)
         if unhealthy_static_nodes:
             log.info("Found the following unhealthy static nodes: %s", print_with_count(unhealthy_static_nodes))
             self._handle_unhealthy_static_nodes(unhealthy_static_nodes)
@@ -907,7 +908,6 @@ class ClusterManager:
         if self._is_protected_mode_enabled():
             self._handle_protected_mode_process(active_nodes, partitions_name_map)
 
-        self._event_publisher.publish_insufficient_capacity_events(ice_compute_resources_and_nodes_map)
         if self._config.disable_nodes_on_insufficient_capacity:
             self._handle_ice_nodes(ice_compute_resources_and_nodes_map, compute_resource_nodes_map)
 

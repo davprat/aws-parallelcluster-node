@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 # A nosec comment is appended to the following line in order to disable the B404 check.
 # In this file the input of the module subprocess is trusted.
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, Iterable, List, Tuple
 
 from slurm_plugin.common import log_exception
 from slurm_plugin.slurm_resources import DynamicNode, SlurmNode
@@ -30,8 +30,9 @@ for failure in ["UnauthorizedOperation", "AccessDeniedException"]:
 
 
 class ClusterEventPublisher:
-    def __init__(self, event_publisher: Callable):
+    def __init__(self, event_publisher: Callable, max_list_size=100):
         self._publish_event = event_publisher
+        self._max_list_size = max_list_size
 
     @property
     def publish_event(self):
@@ -93,12 +94,18 @@ class ClusterEventPublisher:
         )
 
     @log_exception(logger, "publish_unhealthy_dynamic_node_events", catch_exception=Exception, raise_on_error=False)
-    def publish_unhealthy_dynamic_node_events(self, unhealthy_dynamic_nodes: List[SlurmNode]):
+    def publish_unhealthy_dynamic_node_events(
+        self,
+        unhealthy_dynamic_nodes: Iterable[SlurmNode],
+        instances_to_terminate: List[str],
+        power_down_nodes: List[str],
+    ):
         timestamp = ClusterEventPublisher.timestamp()
+
         self.publish_event(
             "WARNING" if unhealthy_dynamic_nodes else "DEBUG",
             "Number of dynamic nodes failing scheduler health check",
-            event_type="unhealthy-dynamic-node-count",
+            event_type="dynamic-node-health-check-failure-count",
             timestamp=timestamp,
             detail={
                 "count": len(unhealthy_dynamic_nodes),
@@ -110,8 +117,9 @@ class ClusterEventPublisher:
                 ],
             },
         )
+
         self.publish_event(
-            "INFO",
+            "DEBUG",
             "Dynamic node failing scheduler health check",
             event_type="dynamic-node-health-check-failure",
             timestamp=timestamp,
@@ -125,17 +133,10 @@ class ClusterEventPublisher:
             ),
         )
 
-    @log_exception(
-        logger, "publish_unhealthy_dynamic_node_action_events", catch_exception=Exception, raise_on_error=False
-    )
-    def publish_unhealthy_dynamic_node_action_events(
-        self, instances_to_terminate: List[str], power_down_nodes: List[str]
-    ):
-        timestamp = ClusterEventPublisher.timestamp()
         self.publish_event(
             "INFO" if instances_to_terminate else "DEBUG",
             "Number of instances being terminating due to backing unhealthy dynamic nodes",
-            event_type="dynamic-node-health-check-failure-instance-terminate-count",
+            event_type="dynamic-node-failure-instance-terminate-count",
             timestamp=timestamp,
             detail={
                 "count": len(instances_to_terminate),
@@ -145,34 +146,13 @@ class ClusterEventPublisher:
         self.publish_event(
             "INFO" if power_down_nodes else "DEBUG",
             "Number of unhealthy dynamic nodes set to down and power_down",
-            event_type="dynamic-node-health-check-failure-power-down-count",
+            event_type="dynamic-node-failure-power-down-count",
             timestamp=timestamp,
             detail={"count": len(power_down_nodes), "nodes": [{"name": node_name} for node_name in power_down_nodes]},
         )
 
     @log_exception(logger, "publish_unhealthy_static_node_events", catch_exception=Exception, raise_on_error=False)
-    def publish_unhealthy_static_node_events(self, unhealthy_static_nodes: List[SlurmNode]):
-        timestamp = ClusterEventPublisher.timestamp()
-        self.publish_event(
-            "WARNING" if unhealthy_static_nodes else "DEGUG",
-            "Number of static nodes failing scheduler health check",
-            event_type="unhealthy-static-node-count",
-            timestamp=timestamp,
-            detail={
-                "count": len(unhealthy_static_nodes),
-                "nodes": [{"name": node.name} for node in unhealthy_static_nodes],
-            },
-        )
-        self.publish_event(
-            "INFO",
-            "Static node failing scheduler health check",
-            event_type="unhealthy-static-node",
-            timestamp=timestamp,
-            event_supplier=({"detail": {"node": node.description()}} for node in unhealthy_static_nodes),
-        )
-
-    @log_exception(logger, "publish_static_nodes_in_replacement", catch_exception=Exception, raise_on_error=False)
-    def publish_static_nodes_in_replacement(
+    def publish_unhealthy_static_node_events(
         self,
         unhealthy_static_nodes: List[SlurmNode],
         instances_to_terminate: List[str],
@@ -200,10 +180,29 @@ class ClusterEventPublisher:
                 }
             }
 
+        timestamp = ClusterEventPublisher.timestamp()
+        self.publish_event(
+            "INFO" if unhealthy_static_nodes else "DEGUG",
+            "Number of static nodes failing scheduler health check",
+            event_type="static-node-health-check-failure-count",
+            timestamp=timestamp,
+            detail={
+                "count": len(unhealthy_static_nodes),
+                "nodes": [{"name": node.name} for node in unhealthy_static_nodes],
+            },
+        )
+        self.publish_event(
+            "DEBUG",
+            "Static node failing scheduler health check",
+            event_type="static-node-health-check-failure",
+            timestamp=timestamp,
+            event_supplier=({"detail": {"node": node.description()}} for node in unhealthy_static_nodes),
+        )
+
         self.publish_event(
             "INFO" if instances_to_terminate else "DEBUG",
             "Terminated instances backing unhealthy nodes",
-            event_type="terminated-unhealthy-node-instance-count",
+            event_type="static-node-failure-instance-terminate-count",
             timestamp=timestamp,
             event_supplier=terminated_instances_supplier(),
         )
@@ -286,35 +285,6 @@ class ClusterEventPublisher:
                 ),
             )
 
-    @log_exception(logger, "publish_insufficient_capacity_events", catch_exception=Exception, raise_on_error=False)
-    def publish_insufficient_capacity_events(
-        self, ice_compute_resources_and_nodes_map: Dict[str, Dict[str, List[DynamicNode]]]
-    ):
-        timestamp = ClusterEventPublisher.timestamp()
-        self.publish_event(
-            "WARNING" if ice_compute_resources_and_nodes_map else "DEBUG",
-            "Insufficient capacity error count",
-            event_type="insufficient-capacity-error-count",
-            timestamp=timestamp,
-            event_supplier=self._count_insufficient_capacity_errors(ice_compute_resources_and_nodes_map),
-        )
-
-        self.publish_event(
-            "DEBUG",
-            "Insufficient capacity errors",
-            event_type="insufficient-capacity-errors",
-            timestamp=timestamp,
-            event_supplier=self._flatten_insufficient_capacity_errors(ice_compute_resources_and_nodes_map),
-        )
-
-        self.publish_event(
-            "DEBUG",
-            "Node with insufficient capacity",
-            event_type="insufficient-capacity-node",
-            timestamp=timestamp,
-            event_supplier=self._flatten_insufficient_capacity_nodes(ice_compute_resources_and_nodes_map),
-        )
-
     @log_exception(logger, "publish_orphaned_instance_events", catch_exception=Exception, raise_on_error=False)
     def publish_orphaned_instance_events(self, cluster_instances: List[any], instances_to_terminate: List[str]):
         timestamp = ClusterEventPublisher.timestamp()
@@ -331,8 +301,8 @@ class ClusterEventPublisher:
             },
         )
         self.publish_event(
-            "INFO",
-            "Found orphaned instance",
+            "DEBUG",
+            "Orphaned instance",
             event_type="terminating-orphaned-instance",
             timestamp=timestamp,
             event_supplier=(
@@ -363,7 +333,7 @@ class ClusterEventPublisher:
             },
         )
         self.publish_event(
-            "INFO",
+            "DEBUG",
             "Partition compute resource failure count",
             event_type="partition-compute-resource-failure-count",
             timestamp=timestamp,
@@ -380,7 +350,7 @@ class ClusterEventPublisher:
         timestamp = ClusterEventPublisher.timestamp()
         self.publish_event(
             "WARNING" if nodes_failing_health_check else "DEBUG",
-            f"Nodes failing {health_check_type} count",
+            f"Seting nodes failing {health_check_type} to DRAIN",
             event_type="node-failed-health-check-count",
             timestamp=timestamp,
             detail={
@@ -391,7 +361,7 @@ class ClusterEventPublisher:
         )
         self.publish_event(
             "INFO" if rebooting_nodes else "DEBUG",
-            f"Rebooted nodes ignoring {health_check_type} count",
+            f"Ignoring recently rebooted nodes failing {health_check_type}",
             event_type="rebooted-nodes-count",
             timestamp=timestamp,
             detail={
@@ -423,8 +393,9 @@ class ClusterEventPublisher:
         timestamp = ClusterEventPublisher.timestamp()
         self.publish_event(
             "WARNING" if nodes_in_replacement else "DEBUG",
-            "Number of static nodes in replacement that failed health checks",
-            event_type="static-node-replacement-health-check-failure-count",
+            "Number of static nodes in replacement that failed health checks - "
+            "will attempt to replace these nodes again immediately",
+            event_type="static-node-replacement-failure-count",
             timestamp=timestamp,
             detail={
                 "count": len(nodes_in_replacement),
@@ -438,7 +409,7 @@ class ClusterEventPublisher:
         )
 
         self.publish_event(
-            "INFO",
+            "DEBUG",
             "Detected failed health check for static node in replacement - "
             "will attempt to replace node again immediately",
             event_type="static-node-replacement-health-check-failure",
@@ -494,6 +465,7 @@ class ClusterEventPublisher:
             ),
         )
 
+    # Slurm Resume Events
     @log_exception(
         logger, "publish_add_instance_for_nodes_success_events", catch_exception=Exception, raise_on_error=False
     )
@@ -534,16 +506,32 @@ class ClusterEventPublisher:
             event_supplier=supply_details(),
         )
 
-    # Slurm Resume Events
     @log_exception(logger, "publish_node_launch_events", catch_exception=Exception, raise_on_error=False)
     def publish_node_launch_events(self, successful_nodes: List[Tuple[str, any]], failed_nodes: Dict[str, List[str]]):
         timestamp = ClusterEventPublisher.timestamp()
+
+        self.publish_event(
+            "WARNING" if failed_nodes else "DEBUG",
+            "Number of nodes that failed to launch",
+            event_type="node-launch-failure-count",
+            timestamp=timestamp,
+            event_supplier=self._get_launch_failure_details(failed_nodes),
+        )
+
         self.publish_event(
             "INFO",
             "Number of successfully launched nodes",
             event_type="successful-node-launch-count",
             timestamp=timestamp,
             event_supplier=ClusterEventPublisher._successful_node_launch_supplier(successful_nodes),
+        )
+
+        self.publish_event(
+            "DEBUG",
+            "Setting failed node to DOWN state",
+            event_type="node-launch-failure",
+            timestamp=timestamp,
+            event_supplier=self._flatten_failed_launch_nodes(failed_nodes),
         )
 
         self.publish_event(
@@ -562,30 +550,20 @@ class ClusterEventPublisher:
             ),
         )
 
-        self.publish_event(
-            "WARNING" if failed_nodes else "DEBUG",
-            "Number of nodes that failed to launch",
-            event_type="node-launch-failure-count",
-            timestamp=timestamp,
-            event_supplier=self._get_launch_failure_details(failed_nodes),
-        )
-
-        self.publish_event(
-            "DEBUG",
-            "Setting failed node to DOWN state",
-            event_type="node-launch-failure",
-            timestamp=timestamp,
-            event_supplier=self._flatten_failed_launch_nodes(failed_nodes),
-        )
-
     # Slurm Suspend Events
     @log_exception(logger, "publish_node_launch_events", catch_exception=Exception, raise_on_error=False)
     def publish_suspend_events(self, slurm_node_spec: str):
-        self.publish_event("INFO", "Node Suspended", event_type="suspend-node", detail={"nodes": slurm_node_spec})
+        def detail_supplier():
+            yield {"detail": {"nodes": list(_expand_slurm_node_spec(slurm_node_spec))}}
+
+        self.publish_event("DEBUG", "Node Suspended", event_type="suspend-node", event_supplier=detail_supplier())
 
     @log_exception(logger, "publish_node_launch_events", catch_exception=Exception, raise_on_error=False)
     def publish_suspend_error_events(self, error_message, slurm_node_spec: str):
-        self.publish_event("ERROR", error_message, event_type="suspend-error", detail={"nodes": slurm_node_spec})
+        def detail_supplier():
+            yield {"detail": {"nodes": list(_expand_slurm_node_spec(slurm_node_spec))}}
+
+        self.publish_event("ERROR", error_message, event_type="suspend-error", event_supplier=detail_supplier())
 
     @staticmethod
     def _count_cluster_states(nodes: list[SlurmNode]):
